@@ -17,9 +17,9 @@ def add_log(post_id, message, level="info"):
     conn.commit()
     conn.close()
 
-def create_daily_posts(project_id: int):
+def create_daily_posts(project_id: int, target_date: datetime = None):
     """
-    프로젝트에 해당하는 오늘자 포스트 레코드를 생성합니다.
+    프로젝트에 해당하는 특정 날짜(기본: 오늘)의 포스트 레코드를 생성합니다.
     """
     conn = get_conn()
     project = conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
@@ -34,8 +34,9 @@ def create_daily_posts(project_id: int):
     post_ids = []
     conn = get_conn()
     
-    now = datetime.now()
+    target_dt = target_date if target_date else datetime.now()
     target_hours = [9, 13, 18]
+    now = datetime.now()
     
     for i in range(posts_per_day):
         # 무작위 키워드 할당보다는 순환 할당
@@ -46,7 +47,7 @@ def create_daily_posts(project_id: int):
         
         # 아침, 점심, 저녁 배정
         time_idx = i % 3
-        scheduled_at = now.replace(hour=target_hours[time_idx], minute=0, second=0, microsecond=0)
+        scheduled_at = target_dt.replace(hour=target_hours[time_idx], minute=0, second=0, microsecond=0)
         
         # 이미 지났다면 과거 시간이지만 스케줄러가 즉시 처리하도록 둠 (혹은 5분 뒤)
         if scheduled_at < now:
@@ -88,9 +89,9 @@ def run_pipeline(post_id: int, keywords: list[str]):
         conn.commit()
         conn.close()
 
-def trigger_daily_pipeline(project_id: int):
+def trigger_daily_pipeline(project_id: int, target_date: datetime = None):
     """
-    프로젝트의 오늘자 포스트를 생성하고 백그라운드에서 파이프라인을 실행합니다.
+    프로젝트의 오늘자(혹은 특정일자) 포스트를 생성하고 백그라운드에서 파이프라인을 실행합니다.
     """
     conn = get_conn()
     project = conn.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
@@ -100,7 +101,7 @@ def trigger_daily_pipeline(project_id: int):
         return
         
     keywords = [k.strip() for k in project["keywords"].split(",") if k.strip()]
-    post_ids = create_daily_posts(project_id)
+    post_ids = create_daily_posts(project_id, target_date)
     
     def run_all():
         for post_id in post_ids:

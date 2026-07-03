@@ -191,18 +191,28 @@ def write(post_id: int, keywords: str, research_data: str, trend_strategy: str =
                 providers_to_try.append(p)
                 
         last_error = None
+        import time
         for provider in providers_to_try:
-            try:
-                result = attempt_write(provider)
-                if result:
-                    title, content = result
-                    if provider != AI_PROVIDER:
-                        add_log(post_id, f"⚠️ 메인 API({AI_PROVIDER}) 한도 초과/오류 발생. {provider.upper()} API로 자동 전환하여 작성 성공!", "warning")
-                    break
-            except Exception as e:
-                last_error = e
-                add_log(post_id, f"[{provider.upper()}] API 호출 실패: {e}. 다음 API로 넘어갑니다...", "warning")
-                continue
+            success = False
+            for attempt in range(3):
+                try:
+                    result = attempt_write(provider)
+                    if result:
+                        title, content = result
+                        if provider != AI_PROVIDER:
+                            add_log(post_id, f"⚠️ 메인 API({AI_PROVIDER}) 한도 초과/오류 발생. {provider.upper()} API로 자동 전환하여 작성 성공!", "warning")
+                        success = True
+                        break
+                except Exception as e:
+                    if attempt < 2:
+                        delay = 10 * (2 ** attempt)
+                        add_log(post_id, f"[{provider.upper()}] API 오류 ({attempt+1}/3), {delay}초 대기 후 재시도... Error: {e}", "warning")
+                        time.sleep(delay)
+                    else:
+                        last_error = e
+                        add_log(post_id, f"[{provider.upper()}] API 3회 호출 최종 실패: {e}. 다음 API로 넘어갑니다...", "warning")
+            if success:
+                break
                 
         if not title or not content:
             if not GEMINI_API_KEY and not OPENAI_API_KEY and not ANTHROPIC_API_KEY:

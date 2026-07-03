@@ -26,43 +26,51 @@ def research(post_id: int, keywords: list[str]) -> str:
     
     collected = []
     
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-        )
-        page = context.new_page()
-        
-        for keyword in keywords[:3]:  # 최대 3개 키워드
-            try:
-                add_log(post_id, f"키워드 검색 중: {keyword}")
+    for attempt in range(3):
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+                )
+                page = context.new_page()
                 
-                # 네이버 블로그 검색
-                search_url = f"https://search.naver.com/search.naver?where=blog&query={keyword}"
-                page.goto(search_url, timeout=30000)
-                time.sleep(2)
-                
-                # 검색 결과 제목과 요약문 수집
-                items = page.locator("ul.lst_view li.bx, .lst_total .bx").all()
-                
-                for item in items[:5]:  # 상위 5개
+                for keyword in keywords[:3]:  # 최대 3개 키워드
                     try:
-                        title_el = item.locator(".title_link, .api_txt_lines.total_tit").first
-                        desc_el  = item.locator(".dsc_link, .api_txt_lines.dsc_txt").first
+                        add_log(post_id, f"키워드 검색 중: {keyword}")
                         
-                        title = title_el.inner_text(timeout=2000) if title_el.count() > 0 else ""
-                        desc  = desc_el.inner_text(timeout=2000)  if desc_el.count() > 0 else ""
+                        # 네이버 블로그 검색
+                        search_url = f"https://search.naver.com/search.naver?where=blog&query={keyword}"
+                        page.goto(search_url, timeout=30000)
+                        time.sleep(2)
                         
-                        if title and len(title) > 3:
-                            collected.append(f"[{keyword}] {title}\n{desc}")
-                    except:
+                        # 검색 결과 제목과 요약문 수집
+                        items = page.locator("ul.lst_view li.bx, .lst_total .bx").all()
+                        
+                        for item in items[:5]:  # 상위 5개
+                            try:
+                                title_el = item.locator(".title_link, .api_txt_lines.total_tit").first
+                                desc_el  = item.locator(".dsc_link, .api_txt_lines.dsc_txt").first
+                                
+                                title = title_el.inner_text(timeout=2000) if title_el.count() > 0 else ""
+                                desc  = desc_el.inner_text(timeout=2000)  if desc_el.count() > 0 else ""
+                                
+                                if title and len(title) > 3:
+                                    collected.append(f"[{keyword}] {title}\n{desc}")
+                            except:
+                                continue
+                                
+                    except Exception as e:
+                        add_log(post_id, f"키워드 '{keyword}' 수집 실패: {e}", "warning")
                         continue
-                        
-            except Exception as e:
-                add_log(post_id, f"키워드 '{keyword}' 수집 실패: {e}", "warning")
-                continue
-        
-        browser.close()
+                
+                browser.close()
+            break # Success, exit retry loop
+        except Exception as e:
+            add_log(post_id, f"Playwright 실행 오류 ({attempt+1}/3), 재시도 중... Error: {e}", "warning")
+            time.sleep(10)
+            if attempt == 2:
+                add_log(post_id, "Playwright 최종 실패. 빈 자료 반환", "error")
     
     research_text = "\n\n---\n\n".join(collected) if collected else "수집된 자료 없음"
     

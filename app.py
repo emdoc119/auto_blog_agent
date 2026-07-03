@@ -414,13 +414,18 @@ def background_scheduler():
                     except Exception as e:
                         print(f"Feedback Agent error for project {p['id']}: {e}")
                         
-                    # 1-2. 오늘자 스케줄 포스트 생성
-                    today_str = today.strftime("%Y-%m-%d")
-                    count = conn.execute("SELECT COUNT(*) FROM posts WHERE project_id = ? AND date(scheduled_at) = ?", (p["id"], today_str)).fetchone()[0]
-                    if count == 0:
-                        print(f"  -> 프로젝트 {p['id']} 오늘자 포스트 파이프라인 시작")
-                        from agents.orchestrator import trigger_daily_pipeline
-                        trigger_daily_pipeline(p["id"])
+                    # 1-2. 오늘, 내일(2일치) 스케줄 포스트 생성
+                    from datetime import timedelta
+                    for day_offset in range(2):
+                        target_date = today + timedelta(days=day_offset)
+                        target_str = target_date.strftime("%Y-%m-%d")
+                        count = conn.execute("SELECT COUNT(*) FROM posts WHERE project_id = ? AND date(scheduled_at) = ?", (p["id"], target_str)).fetchone()[0]
+                        if count == 0:
+                            print(f"  -> 프로젝트 {p['id']} {target_str} 포스트 파이프라인 시작")
+                            from agents.orchestrator import trigger_daily_pipeline
+                            trigger_daily_pipeline(p["id"], target_date=target_date)
+                            import time
+                            time.sleep(2) # 짧은 딜레이 추가
                 
                 last_daily_check = today
 
