@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blog Agent CEO Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161a23;
+    --surface2: #1e2330;
+    --border: #2a3047;
+    --accent: #6366f1;
+    --accent2: #818cf8;
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Pretendard', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* Header */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+  }
+  .logo { display: flex; align-items: center; gap: 0.75rem; }
+  .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .logo h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
+  .logo span { color: var(--text2); font-size: 0.75rem; font-weight: 400; }
+  .header-right { display: flex; align-items: center; gap: 1rem; }
+  .live-badge { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--green); }
+  .live-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+
+  /* Layout */
+  .container { max-width: 1280px; margin: 0 auto; padding: 2rem; }
+
+  /* Stats */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    transition: transform 0.2s, border-color 0.2s;
+  }
+  .stat-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .stat-label { font-size: 0.75rem; color: var(--text2); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-value { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.04em; }
+  .stat-value.accent { color: var(--accent2); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-value.blue { color: var(--blue); }
+
+  /* Section header */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .section-title { font-size: 1rem; font-weight: 600; color: var(--text); }
+
+  /* Button */
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.6rem 1.25rem;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(99,102,241,0.4); }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+  .btn-sm { padding: 0.4rem 0.9rem; font-size: 0.8rem; }
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-green:hover { opacity: 0.9; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-red:hover { opacity: 0.9; }
+
+  /* Post table */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 2rem;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th { padding: 0.875rem 1.25rem; text-align: left; font-size: 0.7rem; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 1px solid var(--border); }
+  td { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); font-size: 0.875rem; color: var(--text2); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  td a { color: var(--text); font-weight: 500; text-decoration: none; }
+  td a:hover { color: var(--accent2); }
+
+  /* Status badge */
+  .badge {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .badge-researching { background: rgba(59,130,246,0.15); color: var(--blue); }
+  .badge-writing     { background: rgba(245,158,11,0.15); color: var(--yellow); }
+  .badge-pending_approval { background: rgba(99,102,241,0.2); color: var(--accent2); }
+  .badge-approved    { background: rgba(16,185,129,0.1); color: var(--green); }
+  .badge-published   { background: rgba(16,185,129,0.2); color: var(--green); }
+  .badge-rejected    { background: rgba(239,68,68,0.15); color: var(--red); }
+  .badge-error       { background: rgba(239,68,68,0.2); color: var(--red); }
+  .badge-pending     { background: rgba(100,116,139,0.2); color: var(--text3); }
+  .badge-running     { background: rgba(59,130,246,0.15); color: var(--blue); }
+  .badge-done        { background: rgba(16,185,129,0.15); color: var(--green); }
+
+  /* Projects list */
+  .goal-list { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 2rem; }
+  .goal-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    transition: border-color 0.2s;
+  }
+  .goal-item:hover { border-color: var(--accent); }
+  .goal-header { display: flex; justify-content: space-between; align-items: center; }
+  .goal-name { font-weight: 600; font-size: 1.1rem; }
+  .goal-meta { font-size: 0.8rem; color: var(--text3); margin-top: 0.2rem; }
+  .strategy-box {
+    background: rgba(99,102,241,0.05);
+    border-left: 3px solid var(--accent);
+    padding: 0.75rem 1rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: var(--text2);
+    white-space: pre-wrap;
+  }
+  .strategy-label { font-size: 0.7rem; color: var(--accent2); font-weight: 600; margin-bottom: 0.3rem; text-transform: uppercase; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 3rem; color: var(--text3); }
+  .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+
+  /* Alert banner */
+  .alert-banner {
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 0.875rem;
+  }
+  .alert-count { font-weight: 700; color: var(--accent2); font-size: 1.5rem; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-icon">🤖</div>
+    <div>
+      <h1>Blog Agent</h1>
+      <span>CEO Dashboard</span>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><span class="live-dot"></span> Live</div>
+    <a href="/blog_manager" class="btn btn-ghost" style="border-color:#d97706;color:#d97706;">✨ 블로그 리모델링</a>
+    <a href="/analytics" class="btn btn-ghost" style="border-color:var(--blue);color:var(--blue);">📊 통계 분석</a>
+    <a href="/project/new" class="btn btn-primary">＋ 새 프로젝트 생성</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Stats -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">전체 포스트</div>
+      <div class="stat-value accent">{{ stats.total }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">🔴 승인 대기</div>
+      <div class="stat-value yellow">{{ stats.pending }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">⚙️ 작업 중</div>
+      <div class="stat-value blue">{{ stats.running }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">✅ 발행 완료</div>
+      <div class="stat-value green">{{ stats.published }}</div>
+    </div>
+  </div>
+
+  <!-- Pending approval alert -->
+  {% if stats.pending > 0 %}
+  <div class="alert-banner">
+    <span class="alert-count">{{ stats.pending }}</span>
+    <div>
+      <strong>CEO 승인이 필요한 초안이 있습니다.</strong><br>
+      <span style="color:var(--text2);">아래 포스트 목록에서 확인 후 승인 또는 거절해 주세요.</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Projects -->
+  <div class="section-header">
+    <div class="section-title">🚀 실행 중인 프로젝트</div>
+  </div>
+  {% if projects %}
+  <div class="goal-list">
+    {% for p in projects %}
+    <div class="goal-item" style="cursor:pointer;" onclick="location.href='/project/{{ p.id }}'">
+      <div class="goal-header">
+        <div>
+          <div class="goal-name"><a href="/project/{{ p.id }}" style="color:var(--text);text-decoration:none;">{{ p.title }}</a></div>
+          <div class="goal-meta">키워드: {{ p.keywords }} &nbsp;·&nbsp; 매일 {{ p.posts_per_day }}개 발행 &nbsp;·&nbsp; {{ p.created_at[:10] }} 생성</div>
+        </div>
+        <div>
+          <span class="badge badge-{{ p.status }}">{{ p.status }}</span>
+        </div>
+      </div>
+      
+      {% if p.strategy_feedback %}
+      <div class="strategy-box">
+        <div class="strategy-label">Feedback Agent 전략 지침</div>
+        {{ p.strategy_feedback }}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty" style="margin-bottom:2rem;">
+    <div class="empty-icon">🚀</div>
+    <div>현재 진행 중인 프로젝트가 없습니다. 새 프로젝트를 생성해 주세요.</div>
+  </div>
+  {% endif %}
+
+  <!-- Recent Posts -->
+  <div class="section-header">
+    <div class="section-title">📝 최근 포스트</div>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <form action="/reset_all_errors" method="POST" style="margin: 0;">
+        <button type="submit" class="btn btn-ghost btn-sm" style="color:#d97706; border-color:#d97706;" onclick="return confirm('에러가 난 모든 글을 다시 대기 중으로 복구하시겠습니까? (스케줄러가 1분마다 순차적으로 재시작합니다)');">🔄 전체 에러 복구</button>
+      </form>
+    </div>
+  </div>
+  <div class="card">
+    {% if recent_posts %}
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>제목</th>
+          <th>프로젝트</th>
+          <th>상태</th>
+          <th>생성일</th>
+          <th>액션</th>
+        </tr>
+      </thead>
+      <tbody id="posts-tbody">
+        {% for p in recent_posts %}
+        <tr>
+          <td style="color:var(--text3);">{{ p.id }}</td>
+          <td><a href="/post/{{ p.id }}">{{ p.title or '(제목 없음)' }}</a></td>
+          <td>{{ p.project_title or '-' }}</td>
+          <td><span class="badge badge-{{ p.status }}">{{ p.status }}</span></td>
+          <td>{{ (p.created_at or '')[:16] }}</td>
+          <td>
+            {% if p.status == 'pending_approval' %}
+            <div class="actions">
+              <form action="/post/{{ p.id }}/approve" method="POST" style="display:inline;">
+                <button type="submit" class="btn btn-primary btn-sm">승인 및 발행</button>
+              </form>
+              <form action="/post/{{ p.id }}/retry" method="POST" style="display:inline;">
+                <button type="submit" class="btn btn-ghost btn-sm">재작성</button>
+              </form>
+              <form action="/post/{{ p.id }}/force_publish" method="POST" style="display:inline;">
+                <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--green); border-color:var(--green);">🚀 즉시 발행</button>
+              </form>
+            </div>
+            {% elif p.status == 'published' %}
+            <span style="color:var(--green);font-size:0.8rem;">✓ 발행됨</span>
+            {% elif p.status in ['scheduled', 'error'] %}
+            <div class="actions">
+              <a href="/post/{{ p.id }}" class="btn btn-ghost btn-sm">보기</a>
+              {% if p.status == 'error' %}
+              <form action="/post/{{ p.id }}/retry" method="POST" style="display:inline;">
+                <button type="submit" class="btn btn-ghost btn-sm" style="color:#d97706; border-color:#d97706;">🔄 재작성</button>
+              </form>
+              {% endif %}
+              <form action="/post/{{ p.id }}/force_publish" method="POST" style="display:inline;">
+                <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--green); border-color:var(--green);">🚀 즉시 발행</button>
+              </form>
+            </div>
+            {% else %}
+            <a href="/post/{{ p.id }}" class="btn btn-ghost btn-sm">보기</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">
+      <div class="empty-icon">📄</div>
+      <div>아직 포스트가 없습니다.</div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+  // 30초마다 상태를 자동으로 갱신합니다
+  setInterval(() => { location.reload(); }, 30000);
+</script>
+</body>
+</html>

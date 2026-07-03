@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>통계 분석 대시보드 · Blog Agent</title>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root{--bg:#0d0f14;--surface:#161a23;--border:#2a3047;--accent:#6366f1;--text:#e2e8f0;--text2:#94a3b8;--green:#10b981;}
+  body{font-family:'Pretendard',sans-serif;background:var(--bg);color:var(--text);margin:0;padding:0;}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 2rem;height:64px;display:flex;align-items:center;justify-content:space-between;}
+  .container{max-width:1080px;margin:2rem auto;padding:0 2rem;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2rem;}
+  .filters{display:flex;gap:1rem;margin-bottom:2rem;}
+  select{padding:0.75rem 1rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;outline:none;}
+  h2{margin-top:0;}
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;align-items:center;gap:1rem;">
+    <span style="font-size:1.2rem;">🤖</span> <strong>Blog Agent</strong>
+  </div>
+  <a href="/" style="color:var(--text2);text-decoration:none;">← 대시보드로 돌아가기</a>
+</header>
+<div class="container">
+  <h2>📊 발행처별 방문자 통계</h2>
+  <div class="filters">
+    <select id="accountSelect" onchange="loadStats()">
+      <option value="">모든 계정 합산</option>
+      {% for acc in accounts %}
+      <option value="{{ acc.id }}">[{{ acc.platform | upper }}] {{ acc.blog_url }}</option>
+      {% endfor %}
+    </select>
+    <select id="daysSelect" onchange="loadStats()">
+      <option value="7" selected>최근 7일</option>
+      <option value="14">최근 14일</option>
+      <option value="30">최근 30일</option>
+    </select>
+  </div>
+  
+  <div class="card">
+    <canvas id="visitorsChart" height="100"></canvas>
+  </div>
+</div>
+
+<script>
+let chartInstance = null;
+
+async function loadStats() {
+    const accId = document.getElementById("accountSelect").value;
+    const days = document.getElementById("daysSelect").value;
+    
+    let url = `/api/stats?days=${days}`;
+    if (accId) url += `&account_id=${accId}`;
+    
+    const res = await fetch(url);
+    const data = await res.json();
+    
+    renderChart(data.labels, data.visitors);
+}
+
+function renderChart(labels, data) {
+    const ctx = document.getElementById('visitorsChart').getContext('2d');
+    if (chartInstance) {
+        chartInstance.destroy();
+    }
+    
+    chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '일일 방문자 수',
+                data: data,
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                borderWidth: 2,
+                pointBackgroundColor: '#818cf8',
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#2a3047' }, ticks: { color: '#94a3b8' } },
+                x: { grid: { color: '#2a3047' }, ticks: { color: '#94a3b8' } }
+            }
+        }
+    });
+}
+
+// 초기 로딩
+loadStats();
+</script>
+</body>
+</html>

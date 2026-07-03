@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>새 프로젝트 생성 · Blog Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0d0f14;--surface:#161a23;--surface2:#1e2330;--border:#2a3047;
+    --accent:#6366f1;--accent2:#818cf8;--green:#10b981;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Pretendard',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 2rem;height:64px;display:flex;align-items:center;justify-content:space-between;}
+  .logo{display:flex;align-items:center;gap:.75rem;}
+  .logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+  .logo h1{font-size:1.1rem;font-weight:700;}
+  .container{max-width:720px;margin:3rem auto;padding:0 2rem;width:100%;}
+  h2{font-size:1.75rem;font-weight:700;letter-spacing:-.04em;margin-bottom:.5rem;}
+  .sub{color:var(--text2);margin-bottom:2.5rem;font-size:.9rem;}
+  .form-group{margin-bottom:1.5rem;}
+  label{display:block;font-size:.8rem;font-weight:600;color:var(--text2);margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.05em;}
+  input,textarea,select{
+    width:100%;padding:.875rem 1rem;
+    background:var(--surface);border:1.5px solid var(--border);border-radius:12px;
+    color:var(--text);font-size:.9rem;font-family:inherit;
+    outline:none;transition:border-color .2s;
+    appearance:none;
+  }
+  input:focus,textarea:focus,select:focus{border-color:var(--accent);}
+  textarea{resize:vertical;min-height:100px;}
+  .hint{font-size:.75rem;color:var(--text3);margin-top:.4rem;}
+  .count-group{display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;}
+  .count-btn{
+    padding:.75rem;text-align:center;border-radius:12px;
+    border:1.5px solid var(--border);background:var(--surface);
+    color:var(--text2);cursor:pointer;font-size:1.1rem;font-weight:700;
+    transition:all .2s;
+  }
+  .count-btn:hover{border-color:var(--accent);color:var(--accent2);}
+  .count-btn.selected{border-color:var(--accent);background:rgba(99,102,241,.15);color:var(--accent2);}
+  .actions{display:flex;gap:1rem;margin-top:2.5rem;}
+  .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.75rem 1.5rem;border-radius:12px;font-size:.9rem;font-weight:600;cursor:pointer;border:none;text-decoration:none;transition:all .2s;}
+  .btn-primary{background:var(--accent);color:#fff;flex:1;justify-content:center;}
+  .btn-primary:hover{background:var(--accent2);transform:translateY(-1px);box-shadow:0 4px 20px rgba(99,102,241,.4);}
+  .btn-ghost{background:transparent;color:var(--text2);border:1.5px solid var(--border);}
+  .btn-ghost:hover{border-color:var(--accent);color:var(--text);}
+  .keyword-chips{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.75rem;}
+  .chip{padding:.3rem .8rem;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);border-radius:999px;font-size:.75rem;color:var(--accent2);cursor:pointer;transition:all .2s;}
+  .chip:hover{background:rgba(99,102,241,.3);}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-icon">🤖</div>
+    <h1>Blog Agent</h1>
+  </div>
+  <a href="/" style="color:var(--text2);font-size:.85rem;text-decoration:none;">← 대시보드</a>
+</header>
+
+<div class="container">
+  <h2>🎯 새 프로젝트 생성</h2>
+  <p class="sub">지속 가능한 블로그 프로젝트를 생성합니다. (매일 설정된 개수만큼 무한 생성)</p>
+
+  <form method="POST" action="/project/new">
+    <div class="form-group">
+      <label>발행할 블로그 계정 (플랫폼)</label>
+      <select name="account_id" required>
+        {% for acc in accounts %}
+        <option value="{{ acc.id }}">[{{ acc.platform | upper }}] {{ acc.blog_url }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint"><a href="/accounts" style="color:var(--accent2);text-decoration:none;">+ 새 계정 연동하기</a></div>
+    </div>
+
+    <div class="form-group">
+      <label>프로젝트 이름</label>
+      <input type="text" name="title" placeholder="예: MDOC 건강/웰니스 프로젝트" required>
+    </div>
+
+    <div class="form-group">
+      <label>타겟 카테고리 (게시판 이름)</label>
+      <input type="text" name="category_name" placeholder="예: 웰니스 및 응급실">
+      <div class="hint">비워두면 AI가 프로젝트 이름을 기반으로 자동 생성합니다. (플랫폼에 따라 자동 생성이 제한될 수 있습니다)</div>
+    </div>
+
+    <div class="form-group">
+      <label>상세 설명 (선택)</label>
+      <textarea name="description" placeholder="어떤 방향으로 콘텐츠를 작성할지 설명해 주세요."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>핵심 키워드 (쉼표로 구분)</label>
+      <input type="text" name="keywords" id="keywords-input" placeholder="예: 만성피로, 장건강, 번아웃증상, 수면개선" required>
+      <div class="hint">아래 추천 키워드를 클릭하면 자동으로 추가됩니다.</div>
+      <div class="keyword-chips">
+        <span class="chip" onclick="addKeyword('만성피로해소')">만성피로해소</span>
+        <span class="chip" onclick="addKeyword('번아웃증상')">번아웃증상</span>
+        <span class="chip" onclick="addKeyword('장내미생물')">장내미생물</span>
+        <span class="chip" onclick="addKeyword('면역력강화')">면역력강화</span>
+        <span class="chip" onclick="addKeyword('갱년기증상')">갱년기증상</span>
+        <span class="chip" onclick="addKeyword('혈당관리')">혈당관리</span>
+        <span class="chip" onclick="addKeyword('낙상예방운동')">낙상예방운동</span>
+        <span class="chip" onclick="addKeyword('근감소증예방')">근감소증예방</span>
+        <span class="chip" onclick="addKeyword('수면개선')">수면개선</span>
+        <span class="chip" onclick="addKeyword('명상방법')">명상방법</span>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>하루 발행 포스트 수 (스케줄링)</label>
+      <div class="count-group">
+        <div class="count-btn" onclick="setCount(1)">1개</div>
+        <div class="count-btn" onclick="setCount(2)">2개</div>
+        <div class="count-btn selected" onclick="setCount(3)">3개 (추천)</div>
+        <div class="count-btn" onclick="setCount(4)">4개</div>
+        <div class="count-btn" onclick="setCount(5)">5개</div>
+      </div>
+      <input type="hidden" name="posts_per_day" id="post-count-input" value="3">
+    </div>
+
+    <div class="actions">
+      <a href="/" class="btn btn-ghost">취소</a>
+      <button type="submit" class="btn btn-primary">🚀 프로젝트 시작</button>
+    </div>
+  </form>
+</div>
+
+<script>
+function setCount(n) {
+  document.getElementById('post-count-input').value = n;
+  document.querySelectorAll('.count-btn').forEach(b => b.classList.remove('selected'));
+  event.target.classList.add('selected');
+}
+function addKeyword(kw) {
+  const inp = document.getElementById('keywords-input');
+  const current = inp.value.trim();
+  if (current && !current.endsWith(',')) inp.value = current + ', ' + kw;
+  else inp.value = current + kw;
+}
+</script>
+</body>
+</html>

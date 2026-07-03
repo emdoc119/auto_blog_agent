@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>초안 검토 · Blog Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0d0f14;--surface:#161a23;--surface2:#1e2330;--border:#2a3047;--accent:#6366f1;--accent2:#818cf8;--green:#10b981;--yellow:#f59e0b;--red:#ef4444;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Pretendard',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 2rem;height:64px;display:flex;align-items:center;justify-content:space-between;}
+  .logo{display:flex;align-items:center;gap:.75rem;}
+  .logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+  .container{max-width:960px;margin:2rem auto;padding:0 2rem;}
+  .back{color:var(--text2);font-size:.85rem;text-decoration:none;display:inline-flex;align-items:center;gap:.4rem;margin-bottom:1.5rem;}
+  .back:hover{color:var(--text);}
+  .page-header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:2rem;}
+  .page-title{font-size:1.5rem;font-weight:700;letter-spacing:-.03em;}
+  .page-meta{font-size:.8rem;color:var(--text3);margin-top:.4rem;}
+  .badge{display:inline-flex;align-items:center;gap:.3rem;padding:.3rem .8rem;border-radius:999px;font-size:.7rem;font-weight:600;text-transform:uppercase;}
+  .badge-pending_approval{background:rgba(99,102,241,.2);color:var(--accent2);}
+  .badge-published{background:rgba(16,185,129,.2);color:var(--green);}
+  .badge-rejected{background:rgba(239,68,68,.15);color:var(--red);}
+  .badge-researching,.badge-writing{background:rgba(59,130,246,.15);color:#3b82f6;}
+  .grid{display:grid;grid-template-columns:1fr 320px;gap:1.5rem;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.5rem;}
+  .card-title{font-size:.8rem;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:1rem;}
+  label{display:block;font-size:.8rem;font-weight:600;color:var(--text2);margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.04em;}
+  input,textarea{width:100%;padding:.75rem 1rem;background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;color:var(--text);font-size:.9rem;font-family:inherit;outline:none;transition:border-color .2s;}
+  input:focus,textarea:focus{border-color:var(--accent);}
+  textarea{resize:vertical;line-height:1.7;}
+  .form-group{margin-bottom:1.25rem;}
+  .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.75rem 1.25rem;border-radius:12px;font-size:.875rem;font-weight:600;cursor:pointer;border:none;text-decoration:none;transition:all .2s;width:100%;justify-content:center;margin-bottom:.75rem;}
+  .btn-primary{background:var(--accent);color:#fff;}
+  .btn-primary:hover{background:var(--accent2);box-shadow:0 4px 20px rgba(99,102,241,.4);}
+  .btn-red{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3);}
+  .btn-red:hover{background:var(--red);color:#fff;}
+  .btn-yellow{background:rgba(245,158,11,.15);color:var(--yellow);border:1px solid rgba(245,158,11,.3);}
+  .btn-yellow:hover{background:var(--yellow);color:#fff;}
+  .reject-area{display:none;margin-top:.75rem;}
+  .reject-area textarea{min-height:80px;font-size:.85rem;}
+  .log-item{display:flex;gap:.75rem;padding:.6rem 0;border-bottom:1px solid var(--border);font-size:.8rem;}
+  .log-item:last-child{border:none;}
+  .log-agent{color:var(--accent2);font-weight:600;flex-shrink:0;width:90px;}
+  .log-msg{color:var(--text2);flex:1;}
+  .log-time{color:var(--text3);flex-shrink:0;}
+  .log-warning .log-msg{color:var(--yellow);}
+  .log-error .log-msg{color:var(--red);}
+  .status-spinner{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent2);border-radius:50%;animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-icon">🤖</div>
+    <span style="font-size:1.1rem;font-weight:700;">Blog Agent</span>
+  </div>
+  <span style="color:var(--text2);font-size:.85rem;">CEO Dashboard</span>
+</header>
+
+<div class="container">
+  <a href="/" class="back">← 대시보드로 돌아가기</a>
+
+  <div class="page-header">
+    <div>
+      <span class="badge badge-{{ post.status }}">{{ post.status }}</span>
+      <div class="page-title" style="margin-top:.5rem;">포스트 #{{ post.id }}</div>
+      <div class="page-meta">프로젝트: {{ post.project_title }} &nbsp;·&nbsp; 생성: {{ (post.created_at or '')[:16] }}</div>
+    </div>
+  </div>
+
+  {% if post.status in ['researching', 'writing'] %}
+  <div style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem;">
+    <div class="status-spinner"></div>
+    <div>
+      <strong>에이전트가 작업 중입니다.</strong><br>
+      <span style="font-size:.85rem;color:var(--text2);">현재 상태: <strong>{{ post.status }}</strong> — 아래 로그를 확인하거나 페이지를 새로고침하세요.</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="grid">
+    <!-- Left: 초안 내용 -->
+    <div>
+      {% if post.status == 'pending_approval' %}
+      <form method="POST" action="/post/{{ post.id }}/approve">
+        <div class="form-group">
+          <label>제목 (수정 가능)</label>
+          <input type="text" name="title" value="{{ post.title or '' }}">
+        </div>
+        <div class="form-group">
+          <label>본문 (수정 가능)</label>
+          <textarea name="content" style="min-height:500px;">{{ post.content or '' }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top:.5rem;">✅ 승인하고 발행하기</button>
+      </form>
+      {% else %}
+      <div class="card">
+        <div class="card-title">제목</div>
+        <div style="font-size:1.1rem;font-weight:600;margin-bottom:1.5rem;">{{ post.title or '(아직 제목 없음)' }}</div>
+        <div class="card-title">본문</div>
+        <div style="white-space:pre-wrap;line-height:1.8;color:var(--text2);font-size:.9rem;">{{ post.content or '(아직 본문 없음)' }}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Right: 액션 + 로그 -->
+    <div>
+      {% if post.status == 'pending_approval' %}
+      <div class="card" style="margin-bottom:1.5rem;">
+        <div class="card-title">CEO 액션</div>
+        <button onclick="toggleReject()" class="btn btn-red">❌ 거절하기</button>
+        <div class="reject-area" id="reject-area">
+          <form method="POST" action="/post/{{ post.id }}/reject">
+            <textarea name="feedback" placeholder="거절 사유를 입력해 주세요 (선택)"></textarea>
+            <button type="submit" class="btn btn-red" style="margin-top:.5rem;">거절 확정</button>
+          </form>
+        </div>
+      </div>
+      {% elif post.status == 'rejected' %}
+      <div class="card" style="margin-bottom:1.5rem;">
+        <div class="card-title">거절 사유</div>
+        <div style="font-size:.85rem;color:var(--text2);margin-bottom:1rem;">{{ post.ceo_feedback or '(사유 없음)' }}</div>
+        <form method="POST" action="/post/{{ post.id }}/retry">
+          <button type="submit" class="btn btn-yellow">🔄 재작성 요청</button>
+        </form>
+      </div>
+      {% elif post.status == 'published' %}
+      <div class="card" style="margin-bottom:1.5rem;border-color:rgba(16,185,129,.3);">
+        <div style="text-align:center;padding:1rem 0;">
+          <div style="font-size:2rem;margin-bottom:.5rem;">✅</div>
+          <div style="font-weight:600;color:var(--green);">발행 완료</div>
+          <div style="font-size:.8rem;color:var(--text3);margin-top:.3rem;">{{ post.published_at }}</div>
+        </div>
+      </div>
+      {% elif post.status in ['scheduled', 'error'] %}
+      <div class="card" style="margin-bottom:1.5rem;">
+        <div class="card-title">발행 관리</div>
+        {% if post.status == 'error' %}
+        <form method="POST" action="/post/{{ post.id }}/retry" style="margin-bottom: 0.5rem;">
+          <button type="submit" class="btn btn-yellow" style="width: 100%;">🔄 에러 초기화 및 재작성</button>
+        </form>
+        {% endif %}
+        <form method="POST" action="/post/{{ post.id }}/force_publish">
+          <button type="submit" class="btn btn-primary" style="background-color:var(--green); width: 100%;">🚀 즉시 발행</button>
+        </form>
+      </div>
+      {% endif %}
+
+      <!-- 에이전트 로그 -->
+      <div class="card">
+        <div class="card-title">에이전트 로그</div>
+        {% if logs %}
+        {% for l in logs %}
+        <div class="log-item log-{{ l.level }}">
+          <div class="log-agent">{{ l.agent }}</div>
+          <div class="log-msg">{{ l.message }}</div>
+          <div class="log-time">{{ (l.created_at or '')[-8:-3] }}</div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div style="color:var(--text3);font-size:.85rem;text-align:center;padding:1rem 0;">아직 로그가 없습니다.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleReject() {
+  const el = document.getElementById('reject-area');
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+{% if post.status in ['researching', 'writing'] %}
+setTimeout(() => location.reload(), 10000);
+{% endif %}
+</script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>계정 연동 관리 · Blog Agent</title>
+<link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0d0f14;--surface:#161a23;--border:#2a3047;--accent:#6366f1;--text:#e2e8f0;--text2:#94a3b8;--green:#10b981;}
+  body{font-family:'Pretendard',sans-serif;background:var(--bg);color:var(--text);margin:0;padding:0;}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 2rem;height:64px;display:flex;align-items:center;justify-content:space-between;}
+  .container{max-width:960px;margin:2rem auto;padding:0 2rem;}
+  table{width:100%;border-collapse:collapse;margin-top:2rem;background:var(--surface);border-radius:12px;overflow:hidden;}
+  th,td{padding:1rem;text-align:left;border-bottom:1px solid var(--border);}
+  th{background:rgba(255,255,255,0.02);color:var(--text2);font-size:0.8rem;text-transform:uppercase;}
+  .badge{padding:0.3rem 0.6rem;border-radius:20px;font-size:0.75rem;background:rgba(16,185,129,0.15);color:var(--green);}
+  .form-card{background:var(--surface);padding:1.5rem;border-radius:12px;border:1px solid var(--border);margin-top:2rem;}
+  input, select, textarea{width:100%;padding:0.75rem;margin-top:0.5rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;}
+  .btn{padding:0.75rem 1.5rem;background:var(--accent);color:white;border:none;border-radius:8px;cursor:pointer;margin-top:1rem;}
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;align-items:center;gap:1rem;">
+    <span style="font-size:1.2rem;">🤖</span> <strong>Blog Agent</strong>
+  </div>
+  <a href="/" style="color:var(--text2);text-decoration:none;">← 메인으로</a>
+</header>
+<div class="container">
+  <h2>🔗 연동된 블로그 계정 관리</h2>
+  <table>
+    <tr><th>ID</th><th>플랫폼</th><th>블로그 주소</th><th>상태</th><th>연동일</th></tr>
+    {% for acc in accounts %}
+    <tr>
+      <td>{{ acc.id }}</td>
+      <td style="text-transform:capitalize;">{{ acc.platform }}</td>
+      <td>{{ acc.blog_url }}</td>
+      <td><span class="badge">{{ acc.status }}</span></td>
+      <td style="color:var(--text2);">{{ acc.created_at[:10] }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <div class="form-card">
+    <h3>새 계정 연동하기</h3>
+    <form method="POST">
+      <div>
+        <label>플랫폼 선택</label>
+        <select name="platform">
+          <option value="naver">네이버 블로그 (Playwright 방식)</option>
+          <option value="tistory">티스토리 (Open API)</option>
+          <option value="wordpress">워드프레스 (REST API)</option>
+        </select>
+      </div>
+      <div style="margin-top:1rem;">
+        <label>블로그 주소 / 대표 이름</label>
+        <input type="text" name="blog_url" placeholder="예: https://blog.naver.com/myblog" required>
+      </div>
+      <div style="margin-top:1rem;">
+        <label>인증 정보 (JSON)</label>
+        <textarea name="credentials" rows="3" placeholder='{"state_file": "naver_state.json"} 또는 {"access_token": "..."}'></textarea>
+      </div>
+      <button class="btn" type="submit">계정 추가</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>
