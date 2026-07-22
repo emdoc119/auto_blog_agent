@@ -7,6 +7,32 @@ def get_conn():
     conn.row_factory = sqlite3.Row
     return conn
 
+def migrate_schema(conn):
+    """기존 테이블에 신규 컬럼/테이블을 추가 (멱등, 재실행 안전)."""
+    cur = conn.cursor()
+    existing = {r[1] for r in cur.execute("PRAGMA table_info(posts)").fetchall()}
+    additions = [
+        ("quality_score", "REAL"),
+        ("quality_detail", "TEXT"),
+        ("views", "INTEGER DEFAULT 0"),
+        ("seo_tags", "TEXT"),
+        ("title_candidates", "TEXT"),
+    ]
+    for col, typ in additions:
+        if col not in existing:
+            cur.execute(f"ALTER TABLE posts ADD COLUMN {col} {typ}")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS quality_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            post_id INTEGER,
+            score REAL,
+            detail TEXT,
+            attempt INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
 def init_db():
     conn = get_conn()
     cur = conn.cursor()
@@ -95,6 +121,7 @@ def init_db():
         )
     """)
     
+    migrate_schema(conn)
     conn.commit()
     conn.close()
     print("✅ DB initialized.")

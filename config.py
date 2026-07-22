@@ -68,6 +68,12 @@ AUTO_PUBLISH = True
 ENABLE_EDITOR = os.getenv("ENABLE_EDITOR", "1") not in ("0", "false", "False")
 # 글별 경쟁사 트렌드 분석 (글마다 Playwright 검색 + LLM. 비용/시간 절약하려면 0)
 ENABLE_TREND = os.getenv("ENABLE_TREND", "1") not in ("0", "false", "False")
+# 품질 점수화 + 기준 미만 자동 개선 루프
+ENABLE_QUALITY_SCORE = os.getenv("ENABLE_QUALITY_SCORE", "1") not in ("0", "false", "False")
+QUALITY_THRESHOLD = int(os.getenv("QUALITY_THRESHOLD", "75"))   # 이 점수 미만이면 개선 시도
+MAX_QUALITY_ATTEMPTS = int(os.getenv("MAX_QUALITY_ATTEMPTS", "2"))  # 최대 개선 시도 횟수
+# SEO 태그 자동 생성 (발행 시 네이버 태그 입력)
+ENABLE_SEO = os.getenv("ENABLE_SEO", "1") not in ("0", "false", "False")
 
 # Flask 설정
 FLASK_HOST = "0.0.0.0"

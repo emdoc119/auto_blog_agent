@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--title",   type=str, default="테스트 제목")
     parser.add_argument("--content", type=str, default="테스트 본문입니다.")
     parser.add_argument("--category", type=str, help="네이버 블로그 카테고리 이름")
+    parser.add_argument("--tags", type=str, default="", help="쉼표 구분 SEO 태그")
     args = parser.parse_args()
 
     if not os.path.exists(STATE_FILE):
@@ -221,6 +222,25 @@ def main():
                     print("  Warning: Category dropdown button not found.")
             except Exception as e:
                 print(f"  Error selecting category: {e}")
+
+        # 태그 입력 로직 (best-effort)
+        if args.tags:
+            print(f"Attempting to add tags: {args.tags}")
+            try:
+                tag_input = main_frame.locator(
+                    "input[placeholder*='태그'], input[class*='tag'], .se_publish_tag input"
+                ).first
+                if tag_input.count() > 0:
+                    tag_input.click()
+                    for tag in [t.strip() for t in args.tags.split(",") if t.strip()]:
+                        tag_input.type(tag, delay=0)
+                        tag_input.press("Enter")
+                        time.sleep(0.3)
+                    print("  Tags added.")
+                else:
+                    print("  Warning: Tag input not found.")
+            except Exception as e:
+                print(f"  Error adding tags: {e}")
 
         print("Clicking 2nd final confirm button via JS...")
         confirm_btn = main_frame.locator("button[class*='confirm_btn__']").first

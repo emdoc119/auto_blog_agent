@@ -78,7 +78,9 @@ def publish_naver(post_id: int, post: dict) -> bool:
         ]
         if post["category_name"]:
             cmd.extend(["--category", post["category_name"]])
-            
+        if post["seo_tags"]:
+            cmd.extend(["--tags", post["seo_tags"]])
+
         result = subprocess.run(
             cmd,
             capture_output=True,

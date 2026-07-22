@@ -8,7 +8,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db import get_conn
 from agents import researcher, writer, publisher
-from config import ENABLE_EDITOR, ENABLE_TREND
+from config import ENABLE_EDITOR, ENABLE_TREND, ENABLE_QUALITY_SCORE, QUALITY_THRESHOLD, MAX_QUALITY_ATTEMPTS, ENABLE_SEO
 from datetime import datetime, timedelta
 
 def add_log(post_id, message, level="info"):
@@ -88,13 +88,36 @@ def run_pipeline(post_id: int, keywords: list[str]):
         # 4. 품질 에디팅 (선택)
         if ENABLE_EDITOR and content:
             from agents import editor
-            new_title, new_content = editor.edit(post_id, title, content)
-            if new_content != content:
-                conn = get_conn()
-                conn.execute("UPDATE posts SET title = ?, content = ? WHERE id = ?",
-                             (new_title, new_content, post_id))
-                conn.commit()
-                conn.close()
+            title, content = editor.edit(post_id, title, content)
+
+        # 5. 품질 점수화 + 기준 미만 자동 개선 (선택)
+        if ENABLE_QUALITY_SCORE and content:
+            from agents import editor
+            for attempt in range(1, MAX_QUALITY_ATTEMPTS + 1):
+                total, detail = editor.score(post_id, title, content, attempt)
+                if total is None or total >= QUALITY_THRESHOLD:
+                    break
+                if attempt < MAX_QUALITY_ATTEMPTS:
+                    title, content = editor.improve(post_id, title, content, detail)
+
+        # 6. SEO 태그 생성 (선택)
+        seo_tags = ''
+        if ENABLE_SEO and content:
+            try:
+                import seo
+                tags = seo.generate_tags(title, content, kw_str)
+                seo_tags = ', '.join(tags)
+                add_log(post_id, f'SEO 태그: {seo_tags}')
+            except Exception as e:
+                add_log(post_id, f'SEO 태그 생성 실패: {e}', 'warning')
+
+        # 최종본 DB 저장
+        if content:
+            conn = get_conn()
+            conn.execute("UPDATE posts SET title = ?, content = ?, seo_tags = ? WHERE id = ?",
+                         (title, content, seo_tags, post_id))
+            conn.commit()
+            conn.close()
         
     except Exception as e:
         add_log(post_id, f"파이프라인 오류: {e}", "error")
