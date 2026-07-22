@@ -2,18 +2,44 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
+def _load_dotenv():
+    """.env 파일을 os.environ에 로드 (이미 있으면 덮어쓰지 않음)."""
+    env_path = os.path.join(BASE_DIR, ".env")
+    if not os.path.exists(env_path):
+        return
+    try:
+        with open(env_path, encoding="utf-8") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k = k.strip()
+                v = v.strip().strip('"').strip("'")
+                if k and k not in os.environ:
+                    os.environ[k] = v
+    except Exception as e:
+        print(f"[config] .env 로드 실패(무시): {e}")
+
+
+_load_dotenv()
+
 # =====================================================
 # ✏️  여기에 설정을 입력하세요
 # =====================================================
 
 # 에이전트 설정
-# 아래에 발급받은 API 키를 입력하세요 (claude, openai, gemini 중 하나 이상)
+# API 키는 .env 파일 또는 환경변수로 관리합니다 (코드에 직접 입력하지 마세요).
+# .env 예시: DASHSCOPE_API_KEY=sk-...  /  GEMINI_API_KEY=...
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyCipk3wDtTNp74uKaFRgaoracSoQd2Q_c8")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY", "")
 
-# 사용할 AI 공급자 (gemini, anthropic, openai)
-AI_PROVIDER = "gemini" 
+# LLM 라우팅은 llm.py가 담당합니다 (1순위 Qwen, 폴백 Gemini).
+# 아래 값은 하위 호환용으로만 유지됩니다.
+AI_PROVIDER = "qwen"
 
 # 자동화 딜레이 (초)
 AGENT_DELAY = 5

@@ -4,7 +4,7 @@ import json
 import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import GEMINI_API_KEY
+import llm
 from db import get_conn
 
 def generate_blog_proposal(account_id: int):
@@ -26,15 +26,8 @@ def generate_blog_proposal(account_id: int):
 }
 """
     try:
-        from google import genai
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        response = client.models.generate_content(
-            model='gemini-2.5-flash-lite',
-            contents=prompt,
-        )
-        
         # JSON 파싱 (코드 블록 제거)
-        result_text = response.text.strip()
+        result_text = llm.generate(prompt, tier="cheap", max_tokens=800, temperature=0.7)
         if result_text.startswith("```json"):
             result_text = result_text[7:]
         if result_text.endswith("```"):

@@ -5,3 +5,17 @@ __pycache__/
 *.zip
 naver_state.json
 .DS_Store
+
+# 비밀키/환경변수 (절대 커밋 금지)
+.env
+.env.md
+.env.*
+
+# 백업/임시/IDE 산출물
+*.bak
+*.bak_*
+*.db.bak*
+.Rhistory
+.RData
+temp_post.html
+temp_img_*

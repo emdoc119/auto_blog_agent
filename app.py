@@ -78,14 +78,10 @@ def new_project():
         category_name = request.form.get("category_name", "").strip()
         
         if not category_name:
-            from google import genai
-            import os
-            client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-            response = client.models.generate_content(
-                model='gemini-2.5-flash-lite',
-                contents=f"프로젝트 제목 '{title}' 에 적합한 블로그 카테고리(게시판) 이름을 15자 이내로 1개만 생성해줘. (예: 웰니스 및 응급실, IT 기기 리뷰 등). 부가설명 없이 이름만 답변해."
-            )
-            category_name = response.text.strip()
+            import llm
+            category_name = llm.generate(
+                f"프로젝트 제목 '{title}' 에 적합한 블로그 카테고리(게시판) 이름을 15자 이내로 1개만 생성해줘. (예: 웰니스 및 응급실, IT 기기 리뷰 등). 부가설명 없이 이름만 답변해.",
+                tier="cheap", max_tokens=40).strip()
         
         cur = conn.execute(
             "INSERT INTO projects (title, description, keywords, posts_per_day, account_id, category_name) VALUES (?, ?, ?, ?, ?, ?)",
@@ -424,7 +420,6 @@ def background_scheduler():
                             print(f"  -> 프로젝트 {p['id']} {target_str} 포스트 파이프라인 시작")
                             from agents.orchestrator import trigger_daily_pipeline
                             trigger_daily_pipeline(p["id"], target_date=target_date)
-                            import time
                             time.sleep(2) # 짧은 딜레이 추가
                 
                 last_daily_check = today

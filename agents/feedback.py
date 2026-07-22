@@ -4,7 +4,8 @@ import time
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import NAVER_STATE_FILE, GEMINI_API_KEY
+from config import NAVER_STATE_FILE
+import llm
 from db import get_conn
 
 def scrape_blog_stats():
@@ -67,13 +68,7 @@ def analyze_and_update_strategy(project_id: int):
 - [시각적 구조 지시사항]
 """
     try:
-        from google import genai
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        response = client.models.generate_content(
-            model='gemini-2.5-flash-lite',
-            contents=prompt,
-        )
-        feedback = response.text.strip()
+        feedback = llm.generate(prompt, tier="cheap", max_tokens=600)
     except Exception as e:
         print("Gemini API Error:", e)
         feedback = "- 최신 트렌드를 반영하여 가독성 높게 작성하세요.\n- 독자와 소통하는 부드러운 말투를 사용하세요.\n- 전문성을 어필하되 쉽게 풀어쓰세요."

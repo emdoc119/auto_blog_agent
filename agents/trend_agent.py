@@ -3,7 +3,7 @@ import os
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import GEMINI_API_KEY
+import llm
 from db import get_conn
 
 def add_log(post_id, message, level="info"):
@@ -65,13 +65,7 @@ def analyze_trends(post_id: int, keywords: list[str]) -> str:
 부가설명 없이 지침만 나열하세요.
 """
     try:
-        from google import genai
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        response = client.models.generate_content(
-            model='gemini-2.5-flash-lite',
-            contents=prompt,
-        )
-        feedback = response.text.strip()
+        feedback = llm.generate(prompt, tier="cheap", max_tokens=600, post_id=post_id)
         add_log(post_id, "경쟁사 분석 완료 및 트렌드 전략 도출")
         return feedback
     except Exception as e:

@@ -7,7 +7,8 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db import get_conn
-from config import ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, AI_PROVIDER, REQUIRE_CEO_APPROVAL, AUTO_PUBLISH
+from config import REQUIRE_CEO_APPROVAL, AUTO_PUBLISH
+import llm
 
 def add_log(post_id, message, level="info"):
     conn = get_conn()
@@ -67,49 +68,6 @@ TITLE: [매력적인 제목]
 [프리미엄 포맷팅이 적용된 본문 내용]
 """
 
-def write_with_claude(post_id: int, keywords: str, research_data: str, strategy_feedback: str, trend_strategy: str = "") -> tuple[str, str]:
-    """Claude API로 글 생성"""
-    import anthropic
-    add_log(post_id, "Claude API로 글 작성 중...")
-    
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    message = client.messages.create(
-        model="claude-opus-4-5",
-        max_tokens=4096,
-        messages=[{"role": "user", "content": BLOG_PROMPT.format(
-            keywords=keywords, research_data=research_data[:3000], strategy_feedback=strategy_feedback, trend_strategy=trend_strategy
-        )}]
-    )
-    return parse_output(message.content[0].text)
-
-def write_with_openai(post_id: int, keywords: str, research_data: str, strategy_feedback: str, trend_strategy: str = "") -> tuple[str, str]:
-    """OpenAI API로 글 생성"""
-    from openai import OpenAI
-    add_log(post_id, "OpenAI API로 글 작성 중...")
-    
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[{"role": "user", "content": BLOG_PROMPT.format(
-            keywords=keywords, research_data=research_data[:3000], strategy_feedback=strategy_feedback, trend_strategy=trend_strategy
-        )}]
-    )
-    return parse_output(response.choices[0].message.content)
-
-def write_with_gemini(post_id: int, keywords: str, research_data: str, strategy_feedback: str, trend_strategy: str = "") -> tuple[str, str]:
-    """Gemini API로 글 생성"""
-    from google import genai
-    add_log(post_id, "Gemini API로 글 작성 중...")
-    
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    response = client.models.generate_content(
-        model='gemini-2.5-flash-lite',
-        contents=BLOG_PROMPT.format(
-            keywords=keywords, research_data=research_data[:3000], strategy_feedback=strategy_feedback, trend_strategy=trend_strategy
-        ),
-    )
-    return parse_output(response.text)
-
 
 def write_template(keywords: str, research_data: str) -> tuple[str, str]:
     """API 키 없을 때 사용하는 기본 템플릿"""
@@ -160,66 +118,44 @@ def parse_output(text: str) -> tuple[str, str]:
     return title, content
 
 def write(post_id: int, keywords: str, research_data: str, trend_strategy: str = ""):
-    """
-    메인 글쓰기 함수. API 키가 있으면 AI 사용, 없으면 템플릿 사용.
-    """
+    """메인 글쓰기 함수. llm.generate() 사용 (1순위 Qwen, 폴백 Gemini)."""
     add_log(post_id, f"글쓰기 시작: {keywords}")
-    
+
     conn = get_conn()
     post = conn.execute("SELECT project_id FROM posts WHERE id = ?", (post_id,)).fetchone()
     project = conn.execute("SELECT strategy_feedback FROM projects WHERE id = ?", (post["project_id"],)).fetchone() if post else None
     conn.close()
-    
-    strategy = project["strategy_feedback"] if project and project["strategy_feedback"] else "자유롭게 고품질의 글을 작성하세요."
-    
-    try:
-        def attempt_write(provider):
-            if provider == "gemini" and GEMINI_API_KEY:
-                return write_with_gemini(post_id, keywords, research_data, strategy, trend_strategy=trend_strategy)
-            elif provider == "openai" and OPENAI_API_KEY:
-                return write_with_openai(post_id, keywords, research_data, strategy, trend_strategy=trend_strategy)
-            elif provider == "anthropic" and ANTHROPIC_API_KEY:
-                return write_with_claude(post_id, keywords, research_data, strategy, trend_strategy=trend_strategy)
-            return None
 
-        title, content = None, None
-        
-        # 우선순위: 1순위(기본), 2순위(나머지)
-        providers_to_try = [AI_PROVIDER]
-        for p in ["gemini", "openai", "anthropic"]:
-            if p not in providers_to_try:
-                providers_to_try.append(p)
-                
-        last_error = None
-        import time
-        for provider in providers_to_try:
-            success = False
-            for attempt in range(3):
-                try:
-                    result = attempt_write(provider)
-                    if result:
-                        title, content = result
-                        if provider != AI_PROVIDER:
-                            add_log(post_id, f"⚠️ 메인 API({AI_PROVIDER}) 한도 초과/오류 발생. {provider.upper()} API로 자동 전환하여 작성 성공!", "warning")
-                        success = True
-                        break
-                except Exception as e:
-                    if attempt < 2:
-                        delay = 10 * (2 ** attempt)
-                        add_log(post_id, f"[{provider.upper()}] API 오류 ({attempt+1}/3), {delay}초 대기 후 재시도... Error: {e}", "warning")
-                        time.sleep(delay)
-                    else:
-                        last_error = e
-                        add_log(post_id, f"[{provider.upper()}] API 3회 호출 최종 실패: {e}. 다음 API로 넘어갑니다...", "warning")
-            if success:
-                break
-                
-        if not title or not content:
-            if not GEMINI_API_KEY and not OPENAI_API_KEY and not ANTHROPIC_API_KEY:
-                add_log(post_id, "API 키 없음. 템플릿 기반 초안 생성", "warning")
-                title, content = write_template(keywords, research_data)
-            else:
-                raise Exception(f"사용 가능한 모든 API 호출 실패. 마지막 에러: {last_error}")
+    strategy = project["strategy_feedback"] if project and project["strategy_feedback"] else "자유롭게 고품질의 글을 작성하세요."
+
+    try:
+        prompt = BLOG_PROMPT.format(
+            keywords=keywords,
+            research_data=(research_data or "")[:6000],
+            strategy_feedback=strategy,
+            trend_strategy=trend_strategy or "",
+        )
+        # 1차 초안: 저렴한 모델로 대량 생성
+        text = llm.generate(prompt, tier="cheap", max_tokens=3000, temperature=0.85, post_id=post_id)
+        title, content = parse_output(text)
+
+        # 분량이 너무 짧을 때만 강한 모델로 1회 보강 (토큰 절약)
+        if len(content) < 600:
+            add_log(post_id, "초안 분량 부족 -> 강한 모델로 보강 시도", "warning")
+            polish_prompt = f"""아래 블로그 글을 1500~2000자 분량으로 더 풍부하고 가독성 좋게 보완하세요.
+마크다운 소제목, 인용구, 리스트, 3줄 요약 구조를 유지하세요.
+
+제목: {title}
+
+본문:
+{content[:4000]}"""
+            try:
+                text2 = llm.generate(polish_prompt, tier="strong", max_tokens=3000, temperature=0.8, post_id=post_id)
+                t2, c2 = parse_output(text2)
+                if len(c2) > len(content):
+                    title, content = (t2 or title), c2
+            except Exception as pe:
+                add_log(post_id, f"보강 실패(초안 유지): {pe}", "warning")
 
     except Exception as e:
         add_log(post_id, f"글쓰기 최종 실패: {e}", "error")
@@ -228,14 +164,14 @@ def write(post_id: int, keywords: str, research_data: str, trend_strategy: str =
         conn.commit()
         conn.close()
         return "", ""
-    
+
     if AUTO_PUBLISH:
         next_status = "scheduled"
     elif REQUIRE_CEO_APPROVAL:
         next_status = "pending_approval"
     else:
         next_status = "approved"
-    
+
     conn = get_conn()
     conn.execute(
         "UPDATE posts SET title = ?, content = ?, status = ? WHERE id = ?",
@@ -243,6 +179,6 @@ def write(post_id: int, keywords: str, research_data: str, trend_strategy: str =
     )
     conn.commit()
     conn.close()
-    
+
     add_log(post_id, f"글쓰기 완료. 상태: {next_status}")
     return title, content

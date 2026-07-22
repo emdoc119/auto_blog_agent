@@ -5,7 +5,9 @@ import argparse
 import markdown
 from playwright.sync_api import sync_playwright
 
-STATE_FILE = os.path.expanduser("~/.gemini/antigravity/scratch/naver_state.json")
+# 로그인 세션 파일: 스크립트와 같은 폴더의 naver_state.json 사용
+# (config.NAVER_STATE_FILE 과 동일 경로)
+STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "naver_state.json")
 
 TITLE_X = 300
 TITLE_Y = 280
