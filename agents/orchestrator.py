@@ -8,6 +8,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db import get_conn
 from agents import researcher, writer, publisher
+from config import ENABLE_EDITOR, ENABLE_TREND
 from datetime import datetime, timedelta
 
 def add_log(post_id, message, level="info"):
@@ -71,16 +72,29 @@ def run_pipeline(post_id: int, keywords: list[str]):
     Trend 분석 → 자료 수집 → 글쓰기
     """
     try:
-        # 1. 경쟁사 트렌드 분석
-        from agents import trend_agent
-        trend_strategy = trend_agent.analyze_trends(post_id, keywords)
+        # 1. 경쟁사 트렌드 분석 (선택)
+        trend_strategy = ""
+        if ENABLE_TREND:
+            from agents import trend_agent
+            trend_strategy = trend_agent.analyze_trends(post_id, keywords)
         
         # 2. 자료 수집
         research_data = researcher.research(post_id, keywords)
         
-        # 3. 글 작성 (trend_strategy 추가 전달)
+        # 3. 글 작성
         kw_str = ", ".join(keywords)
-        writer.write(post_id, kw_str, research_data, trend_strategy)
+        title, content = writer.write(post_id, kw_str, research_data, trend_strategy)
+
+        # 4. 품질 에디팅 (선택)
+        if ENABLE_EDITOR and content:
+            from agents import editor
+            new_title, new_content = editor.edit(post_id, title, content)
+            if new_content != content:
+                conn = get_conn()
+                conn.execute("UPDATE posts SET title = ?, content = ? WHERE id = ?",
+                             (new_title, new_content, post_id))
+                conn.commit()
+                conn.close()
         
     except Exception as e:
         add_log(post_id, f"파이프라인 오류: {e}", "error")

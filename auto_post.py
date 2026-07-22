@@ -110,8 +110,8 @@ def main():
         downloaded_images = []
         fixed_content = args.content
         
-        # 본문에서 마크다운 이미지 태그 완전히 제거 (HTML로 붙여넣어지는 것 방지)
-        fixed_content = re.sub(r'!\[.*?\]\((https?://[^\)]+)\)', '', fixed_content)
+        # 마크다운 이미지는 유지 -> markdown 변환 시 인라인 <img> 로 본문 중간에 배치
+        # (Pexels 저작권 프리 실사 사진. writer.insert_photos 가 삽입)
         
         # [AI 이미지 프롬프트: '...'] 와 같은 불필요한 텍스트 찌꺼기 제거
         fixed_content = re.sub(r'\[AI 이미지 프롬프트:.*?\]', '', fixed_content)
@@ -120,8 +120,8 @@ def main():
         fixed_content = re.sub(r'\n\s*--\s*\|\s*\n', '\n', fixed_content)
         fixed_content = re.sub(r'([^\n])\n(\s*\|)', r'\1\n\n\2', fixed_content)
         
-        # 이미지 다운로드 (로컬 임시 저장)
-        for url in image_matches:
+        # 이미지 다운로드 비활성 (인라인 <img> 방식 사용. downloaded_images 가 비어 업로드도 자동 스킵)
+        for url in []:
             try:
                 print(f"Downloading: {url[:50]}...")
                 resp = requests.get(url, timeout=10)

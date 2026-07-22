@@ -63,6 +63,12 @@ REQUIRE_CEO_APPROVAL = False
 # 완전 자동 스케줄 발행 여부 (True 시 승인 대기 없이 바로 스케줄 예약됨)
 AUTO_PUBLISH = True
 
+# ── 파이프라인 기능 플래그 (환경변수로 조절 가능) ──
+# 품질 에디터: Writer 초안을 루브릭으로 다듬는 2차 편집 (품질 향상, 토큰 추가 발생)
+ENABLE_EDITOR = os.getenv("ENABLE_EDITOR", "1") not in ("0", "false", "False")
+# 글별 경쟁사 트렌드 분석 (글마다 Playwright 검색 + LLM. 비용/시간 절약하려면 0)
+ENABLE_TREND = os.getenv("ENABLE_TREND", "1") not in ("0", "false", "False")
+
 # Flask 설정
 FLASK_HOST = "0.0.0.0"
 FLASK_PORT = 5001

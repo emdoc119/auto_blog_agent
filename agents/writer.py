@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db import get_conn
 from config import REQUIRE_CEO_APPROVAL, AUTO_PUBLISH
 import llm
+import image_source
 
 def add_log(post_id, message, level="info"):
     conn = get_conn()
@@ -50,10 +51,7 @@ BLOG_PROMPT = """당신은 상위 1% 조회수를 기록하는 최고 수준의 
 
 🎨 시각적 요소(Visuals) 필수 가이드:
 - **마크다운 표(Table):** 정보를 비교할 때 표를 사용하세요. 표 전후로는 반드시 빈 줄(Enter)을 넣어야 표가 깨지지 않습니다.
-- **문맥 맞춤형 AI 이미지 적극 삽입 (3~4개 필수):** 타겟 독자의 이해를 돕기 위해 구간마다 이미지를 삽입하세요.
-  - 질병/해부학 설명 시: `clear_medical_illustration_of_shoulder_joint_pain_white_background`
-  - 논문/AI/약물 설명 시: `clean_flat_design_concept_art_showing_AI_data_analysis_workflow`
-  - 형식: `![이미지 설명](https://image.pollinations.ai/prompt/{{영어로_번역된_매우_구체적이고_긴_프롬프트}}?width=800&height=600&nologo=true)`
+- **이미지:** 본문에 이미지 마크다운이나 이미지 URL을 직접 넣지 마세요. 시스템이 저작권 프리 실사 사진(Pexels)을 본문 중간에 자동으로 삽입합니다.
 
 작성 규칙:
 1. **경쟁 블로그 압도:** 참고 자료(상위 노출 블로그)의 제목과 구조를 뛰어넘는 훨씬 매력적이고 세련된 제목(30자 내외)과 풍성한 내용을 작성하세요.
@@ -117,6 +115,47 @@ def parse_output(text: str) -> tuple[str, str]:
         content = "\n".join(lines[1:]).strip()
     return title, content
 
+def _english_photo_query(keywords: str) -> str:
+    """한국어 키워드를 Pexels 스톡사진 검색용 영문 키워드로 변환."""
+    try:
+        q = llm.generate(
+            "다음 블로그 주제 키워드를 Pexels 스톡사진 검색용 영문 키워드 2~3개로만 변환하세요. "
+            "설명 없이 영문 키워드만 쉼표로 나열하세요. "
+            f"키워드: {keywords}",
+            tier="cheap", max_tokens=40, temperature=0.3,
+        )
+        return q.strip() or keywords
+    except Exception:
+        return keywords
+
+
+def insert_photos(content: str, keywords: str, count: int = 3) -> str:
+    """Pexels 저작권 프리 실사 사진을 본문 소제목 앞에 인라인으로 삽입."""
+    if not content:
+        return content
+    query = _english_photo_query(keywords)
+    photos = image_source.fetch_photos(query, count=count)
+    if not photos:
+        return content
+    lines = content.split("\n")
+    out = []
+    idx = 0
+    for line in lines:
+        is_section = line.startswith("## ")
+        is_summary = ("요약" in line) or line.startswith("## ✅")
+        if is_section and not is_summary and idx < len(photos):
+            ph = photos[idx]
+            out.append("")
+            out.append(f"![{ph['alt']}]({ph['url']})")
+            out.append("")
+            idx += 1
+        out.append(line)
+    if idx == 0 and photos:
+        ph = photos[0]
+        out = [f"![{ph['alt']}]({ph['url']})", ""] + out
+    return "\n".join(out)
+
+
 def write(post_id: int, keywords: str, research_data: str, trend_strategy: str = ""):
     """메인 글쓰기 함수. llm.generate() 사용 (1순위 Qwen, 폴백 Gemini)."""
     add_log(post_id, f"글쓰기 시작: {keywords}")
@@ -164,6 +203,12 @@ def write(post_id: int, keywords: str, research_data: str, trend_strategy: str =
         conn.commit()
         conn.close()
         return "", ""
+
+    # 저작권 프리 실사 사진(Pexels)을 본문 중간에 인라인으로 삽입
+    try:
+        content = insert_photos(content, keywords)
+    except Exception as ie:
+        add_log(post_id, f"사진 삽입 실패(텍스트만 발행): {ie}", "warning")
 
     if AUTO_PUBLISH:
         next_status = "scheduled"
