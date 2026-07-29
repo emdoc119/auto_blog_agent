@@ -35,7 +35,13 @@ def create_daily_posts(project_id: int, target_date: datetime = None):
     post_ids = []
     conn = get_conn()
     
-    target_dt = target_date if target_date else datetime.now()
+    # target_date 가 date 객체로 들어와도 replace(hour=...) 가 가능하도록 datetime 으로 정규화
+    if target_date is None:
+        target_dt = datetime.now()
+    elif isinstance(target_date, datetime):
+        target_dt = target_date
+    else:
+        target_dt = datetime.combine(target_date, datetime.min.time())
     target_hours = [9, 13, 18]
     now = datetime.now()
     
@@ -150,4 +156,3 @@ def trigger_daily_pipeline(project_id: int, target_date: datetime = None):
     t = threading.Thread(target=run_all, daemon=True)
     t.start()
     return post_ids
-
