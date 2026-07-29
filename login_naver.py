@@ -35,11 +35,11 @@ def main():
             has_session = any(c["name"] == "NID_SES" for c in cookies)
             if not has_session:
                 continue
-            # 로그인 확정 검증: 블로그 홈이 로그인 페이지로 리다이렉트되지 않는지
+            # 로그인 확정 검증: 로그인 필수 페이지(에디터)가 로그인으로 리다이렉트되지 않는지
             check = context.new_page()
             try:
-                check.goto(BLOG_HOME, timeout=30000)
-                time.sleep(2)
+                check.goto("https://blog.naver.com/GoBlogWrite.naver", timeout=30000)
+                time.sleep(3)
                 if "nidlogin" not in check.url:
                     logged_in = True
             except Exception as e:

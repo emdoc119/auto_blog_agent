@@ -206,16 +206,17 @@ def main():
         if args.category:
             print(f"Attempting to select category: {args.category}")
             try:
-                # 콤보박스 클릭 시도 (네이버 스마트에디터 ONE의 카테고리 버튼 aria-label 사용)
                 category_dropdown = main_frame.locator("button[aria-label='카테고리 목록 버튼']").first
                 if category_dropdown.count() > 0:
-                    category_dropdown.evaluate("b => b.click()")
-                    time.sleep(1)
-                    # 드롭다운에서 텍스트 일치 항목 클릭
-                    cat_item = main_frame.locator(f"button:has-text('{args.category}'), span:has-text('{args.category}')").last
+                    # 일반 클릭으로 드롭다운 열기 (JS 클릭은 React selectbox 를 열지 못함)
+                    category_dropdown.click(timeout=5000)
+                    time.sleep(1.5)
+                    # 드롭다운 항목(LI item__)에서 카테고리 선택
+                    cat_item = main_frame.locator(f"li[class*='item__']:has-text('{args.category}')").first
                     if cat_item.count() > 0:
-                        cat_item.evaluate("b => b.click()")
+                        cat_item.click(timeout=5000)
                         print(f"  Category '{args.category}' selected successfully.")
+                        time.sleep(1)
                     else:
                         print(f"  Warning: Category '{args.category}' not found in dropdown.")
                 else:

@@ -94,6 +94,7 @@ def publish_naver(post_id: int, post: dict) -> bool:
             return True
         else:
             add_log(post_id, f"발행 실패: {result.stderr[:300]}", "error")
+            _mark_error(post_id)
             return False
             
     except subprocess.TimeoutExpired:
