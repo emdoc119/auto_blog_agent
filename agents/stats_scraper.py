@@ -3,7 +3,6 @@ import os
 import time
 from datetime import datetime
 import re
-import random
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db import get_conn
@@ -23,13 +22,16 @@ def run_stats_scraper():
         blog_url = acc["blog_url"]
         account_id = acc["id"]
         
-        visitors = 0
-        
+        visitors = None
+
         if platform == "naver" and blog_url and "naver.com" in blog_url:
             visitors = scrape_naver_visitors(blog_url)
         else:
-            # 타 플랫폼이거나 URL이 없는 경우 테스트용 가짜 데이터 생성
-            visitors = random.randint(50, 300)
+            print(f"  -> 계정 {account_id} ({platform}): 지원하지 않는 통계 소스, 건너뜀")
+
+        if visitors is None:
+            print(f"  -> 계정 {account_id} ({platform}): 방문자 수 확인 실패, 기존 값 유지")
+            continue
             
         # DB에 저장 (UNIQUE 제약조건으로 인해 오늘 날짜 데이터가 있으면 무시되거나 업데이트 해야 함)
         # SQLite UPSERT 구문 사용 (INSERT ON CONFLICT)
@@ -55,9 +57,9 @@ def run_stats_scraper():
 
     print("📊 [Stats Scraper] 통계 수집 완료.")
 
-def scrape_naver_visitors(url: str) -> int:
+def scrape_naver_visitors(url: str):
     from playwright.sync_api import sync_playwright
-    visitors = 0
+    visitors = None
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -75,14 +77,10 @@ def scrape_naver_visitors(url: str) -> int:
             if match:
                 num_str = match.group(2).replace(',', '')
                 visitors = int(num_str)
-            else:
-                # 못 찾으면 0보다 큰 랜덤 값 (데모용)
-                visitors = random.randint(10, 50)
             browser.close()
     except Exception as e:
         print(f"Naver 스크래핑 오류 ({url}): {e}")
-        visitors = random.randint(10, 50)
-    
+
     return visitors
 
 def _fetch_post_views(page, pid):

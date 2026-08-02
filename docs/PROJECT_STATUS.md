@@ -1,43 +1,45 @@
 # Blog Agent — 프로젝트 상태
 
-> 마지막 갱신: 2026-07-29
+> 마지막 갱신: 2026-08-02
 
 ## 현재 상태
 
-- 네이버 블로그 자동 발행 에이전트. Flask 대시보드(포트 5001) + 백그라운드 스케줄러.
-- macOS LaunchAgent(`com.blogagent.dashboard`)로 영속 실행 (로그인 시 자동 시작, 크래시 시 재시작).
-- 2026-07-29 기준 서비스 정상 가동 중, 일일 글 생성/발행 재개됨.
+- 네이버 블로그 자동 발행 에이전트. Flask 대시보드(포트 5001)와 백그라운드 스케줄러로 구성.
+- macOS LaunchAgent(`com.blogagent.dashboard`)로 로그인 시 시작·장애 시 재시작.
+- 서비스 HTTP 200 확인. 현재 LAN 주소는 `http://192.168.0.9:5001/`.
+- Qwen Token Plan 주간 한도는 2026-08-05 06:12 UTC까지 소진 상태. Qwen 회로를 즉시 차단하고 Gemini로 폴백하도록 복구함.
+- 과거 밀린 작업 38건은 데이터는 보존한 채 `cancelled`. 오늘·내일 작업은 복구했으며 현재 네이버 재로그인 전까지 안전 정지.
 
-## 아키텍처 (파이프라인)
+## 파이프라인
 
-`Orchestrator`가 글마다 다음을 조율:
-`(Trend, 선택) → Researcher(신뢰출처 PubMed/arXiv/S2 + 네이버) → Writer(Qwen 작성 + Pexels 실사 사진 인라인) → Editor(루브릭 편집) → 품질 점수화/자동개선(임계값 75, 최대 2회) → SEO 태그 → DB 저장(scheduled)`
+`Researcher → Writer(Qwen 우선/Gemini 폴백 + Pexels) → 품질 채점 → 기준 미달만 Editor 개선 → SEO → scheduled`
 
-발행은 `app.py` 스케줄러가 예약 시각(09·13·18시)에 `Publisher → auto_post.py`(Playwright, 네이버 SmartEditor) 호출.
-일일 루틴: 통계 수집 + 성과 기반 전략 갱신(Feedback) + 오늘/내일 글 생성.
+- 글별 경쟁사 Trend 호출은 기본 비활성화하여 토큰·시간 사용을 줄임.
+- 모든 LLM 제공자가 실패하면 `error`로 고정하지 않고 `pending + retry_after`로 지수 백오프.
+- 프로세스 재시작 시 `researching/writing/editing`은 `pending`, `publishing`은 `scheduled`로 복구.
+- Writer 초안은 `editing`으로 유지하고 품질·SEO 완료 후에만 `scheduled`로 전환.
+- 발행은 URL 전환 또는 네이버 RSS에서 제목을 확인한 경우에만 `published` 처리.
+- 카테고리 선택 실패는 잘못된 게시판에 올리지 않고 발행 전체를 재시도.
+- 네이버 세션 만료 시 계정을 `reauth_required`로 일시 정지하고 생성·발행을 함께 멈춘 뒤 로그인 갱신 후 자동 재개.
 
-## 주요 모듈
+## 프로젝트 일정
 
-- `llm.py` — 통합 LLM (Qwen 1순위, Gemini 폴백, 재시도/사용량 기록)
-- `sources.py` — PubMed/arXiv/Semantic Scholar (무료 무키)
-- `image_source.py` — Pexels 저작권 프리 사진
-- `seo.py` — 검색 태그 자동 생성
-- `agents/editor.py` — 품질 편집/점수화/개선
-- `agents/orchestrator.py` — 파이프라인 조율
-- `auto_post.py` — 네이버 실제 발행
+- 건강하게 100세: 하루 3회
+- AI 논문 작성: 하루 3회
+- 위고비/마운자로: 하루 3회
+- 통증 치료 가이드: 하루 1회
 
 ## 알려진 문제 / 다음 우선순위
 
-1. **[긴급] Qwen(Token Plan) API 키 무효(401)** — 현재 Gemini 폴백으로 동작(글당 ~15초 재시도 지연). 키 갱신 필요.
-2. `auto_post.py`는 발행 버튼 실패/URL 미변경 때도 종료코드 0을 반환 → 허위 `published` 가능. 실제 발행 완료 검증 필요.
-3. Flask 대시보드가 인증 없이 `0.0.0.0` 노출, 고정 secret key, 평문 credentials — 인증/CSRF/비밀 외부화 필요.
-4. Publisher 비정상 종료 경로가 `_mark_error()`를 안 불러 `publishing` 고착 가능.
-5. 통계 수집 실패 시 임의 방문자 수 생성 → 피드백 데이터 오염. 제거 필요.
-6. 제목 A/B 테스트 미구현 (조회수 데이터 축적 후 진행).
+1. Qwen 주간 Token Plan 한도가 현재 소진됨. 리셋 전까지 Gemini 폴백 사용.
+2. Python 3.9 EOL 및 LibreSSL 경고가 있어 Python 3.11+ 런타임으로 이전 권장.
+3. 대시보드가 LAN 전체(`0.0.0.0`)에 인증 없이 노출됨. Basic Auth/CSRF 적용 필요.
+4. 현재 네이버 로그인 세션 갱신이 필요함. `login_naver.py` 성공 시 대기 발행 자동 재개.
+5. LAN IP가 DHCP로 바뀌므로 고정 주소 또는 로컬 호스트명 도입 검토.
 
 ## 운영 메모
 
 - 서비스 재시작: `launchctl kickstart -k gui/$(id -u)/com.blogagent.dashboard`
-- 네이버 세션 만료 시: `../venv/bin/python login_naver.py`
-- 기능 플래그(.env): ENABLE_EDITOR, ENABLE_TREND, ENABLE_QUALITY_SCORE, ENABLE_SEO, QUALITY_THRESHOLD, MAX_QUALITY_ATTEMPTS, EDITOR_TIER
-- 비밀키(.env, gitignore): DASHSCOPE_API_KEY, GEMINI_API_KEY, DASHSCOPE_BASE_URL, PEXELS_API_KEY
+- 네이버 세션 갱신: `../venv/bin/python login_naver.py`
+- 주요 로그: `scheduler_run.log`, DB `logs` 테이블
+- 비밀키는 Git에서 제외된 `.env`에만 저장하며 로그·문서에 값을 기록하지 않음.

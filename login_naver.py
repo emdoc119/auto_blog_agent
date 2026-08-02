@@ -61,6 +61,17 @@ def main():
         except Exception:
             pass
         context.storage_state(path=STATE_FILE)
+        # 재로그인 대기 때문에 멈춰 둔 네이버 계정을 즉시 재활성화합니다.
+        try:
+            from db import get_conn
+            conn = get_conn()
+            conn.execute(
+                "UPDATE accounts SET status = 'active' WHERE platform = 'naver'"
+            )
+            conn.commit()
+            conn.close()
+        except Exception as exc:
+            print(f"계정 상태 재활성화 경고: {exc}")
         print(f"로그인 세션 저장 완료: {STATE_FILE}")
         browser.close()
 

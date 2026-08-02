@@ -17,6 +17,9 @@ def migrate_schema(conn):
         ("views", "INTEGER DEFAULT 0"),
         ("seo_tags", "TEXT"),
         ("title_candidates", "TEXT"),
+        ("retry_count", "INTEGER DEFAULT 0"),
+        ("retry_after", "DATETIME"),
+        ("last_error", "TEXT"),
     ]
     for col, typ in additions:
         if col not in existing:

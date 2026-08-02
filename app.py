@@ -32,7 +32,7 @@ def dashboard():
         "total":     conn.execute("SELECT COUNT(*) FROM posts").fetchone()[0],
         "pending":   conn.execute("SELECT COUNT(*) FROM posts WHERE status = 'pending_approval'").fetchone()[0],
         "published": conn.execute("SELECT COUNT(*) FROM posts WHERE status = 'published'").fetchone()[0],
-        "running":   conn.execute("SELECT COUNT(*) FROM posts WHERE status IN ('researching','writing')").fetchone()[0],
+        "running":   conn.execute("SELECT COUNT(*) FROM posts WHERE status IN ('researching','writing','editing')").fetchone()[0],
     }
     
     recent_posts = conn.execute("""
@@ -382,6 +382,24 @@ def api_logs(post_id):
 
 def background_scheduler():
     """주기적으로 예약된 포스트를 확인하고 발행합니다."""
+    # 프로세스가 재시작되면 이전 프로세스의 작업 스레드는 사라집니다.
+    # 중간 상태를 영구 고착시키지 말고 재시도 가능한 상태로 복구합니다.
+    recovery_conn = get_conn()
+    recovery_conn.execute("""
+        UPDATE posts
+        SET status = 'pending', retry_after = NULL,
+            last_error = COALESCE(last_error, '서비스 재시작 후 생성 작업 복구')
+        WHERE status IN ('researching', 'writing', 'editing')
+    """)
+    recovery_conn.execute("""
+        UPDATE posts
+        SET status = 'scheduled',
+            last_error = COALESCE(last_error, '서비스 재시작 후 발행 작업 복구')
+        WHERE status = 'publishing'
+    """)
+    recovery_conn.commit()
+    recovery_conn.close()
+
     last_daily_check = None
     while True:
         try:
@@ -425,7 +443,18 @@ def background_scheduler():
                 last_daily_check = today
 
             # 1.5. 'pending' 상태의 밀린 포스트 1개 처리 (API 과부하 방지를 위해 1분당 1개씩만)
-            pending_post = conn.execute("SELECT id, project_id FROM posts WHERE status = 'pending' LIMIT 1").fetchone()
+            pending_post = conn.execute("""
+                SELECT p.id, p.project_id
+                FROM posts p
+                JOIN projects pr ON p.project_id = pr.id
+                JOIN accounts a ON pr.account_id = a.id
+                WHERE p.status = 'pending'
+                  AND (p.retry_after IS NULL OR p.retry_after <= ?)
+                  AND pr.status = 'active'
+                  AND a.status = 'active'
+                ORDER BY COALESCE(p.retry_after, p.created_at), p.id
+                LIMIT 1
+            """, (now.strftime("%Y-%m-%d %H:%M:%S"),)).fetchone()
             if pending_post:
                 pp_id = pending_post["id"]
                 project = conn.execute("SELECT * FROM projects WHERE id = ?", (pending_post["project_id"],)).fetchone()
@@ -447,11 +476,14 @@ def background_scheduler():
                 SELECT p.id, p.project_id
                 FROM posts p
                 JOIN projects pr ON p.project_id = pr.id
+                JOIN accounts a ON pr.account_id = a.id
                 WHERE p.status = 'scheduled' 
                   AND p.scheduled_at <= ? 
+                  AND (p.retry_after IS NULL OR p.retry_after <= ?)
                   AND pr.status = 'active'
+                  AND a.status = 'active'
                 ORDER BY p.scheduled_at ASC
-            """, (now_str,)).fetchall()
+            """, (now_str, now_str)).fetchall()
             
             from collections import defaultdict
             from datetime import timedelta

@@ -67,7 +67,7 @@ AUTO_PUBLISH = True
 # 품질 에디터: Writer 초안을 루브릭으로 다듬는 2차 편집 (품질 향상, 토큰 추가 발생)
 ENABLE_EDITOR = os.getenv("ENABLE_EDITOR", "1") not in ("0", "false", "False")
 # 글별 경쟁사 트렌드 분석 (글마다 Playwright 검색 + LLM. 비용/시간 절약하려면 0)
-ENABLE_TREND = os.getenv("ENABLE_TREND", "1") not in ("0", "false", "False")
+ENABLE_TREND = os.getenv("ENABLE_TREND", "0") not in ("0", "false", "False")
 # 품질 점수화 + 기준 미만 자동 개선 루프
 ENABLE_QUALITY_SCORE = os.getenv("ENABLE_QUALITY_SCORE", "1") not in ("0", "false", "False")
 QUALITY_THRESHOLD = int(os.getenv("QUALITY_THRESHOLD", "75"))   # 이 점수 미만이면 개선 시도

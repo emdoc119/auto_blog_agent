@@ -8,8 +8,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db import get_conn
 from agents import researcher, writer, publisher
-from config import ENABLE_EDITOR, ENABLE_TREND, ENABLE_QUALITY_SCORE, QUALITY_THRESHOLD, MAX_QUALITY_ATTEMPTS, ENABLE_SEO
+from config import (
+    ENABLE_EDITOR, ENABLE_TREND, ENABLE_QUALITY_SCORE, QUALITY_THRESHOLD,
+    MAX_QUALITY_ATTEMPTS, ENABLE_SEO, AUTO_PUBLISH, REQUIRE_CEO_APPROVAL,
+)
 from datetime import datetime, timedelta
+from pipeline_state import defer_post
 
 def add_log(post_id, message, level="info"):
     conn = get_conn()
@@ -91,20 +95,26 @@ def run_pipeline(post_id: int, keywords: list[str]):
         kw_str = ", ".join(keywords)
         title, content = writer.write(post_id, kw_str, research_data, trend_strategy)
 
-        # 4. 품질 에디팅 (선택)
-        if ENABLE_EDITOR and content:
-            from agents import editor
-            title, content = editor.edit(post_id, title, content)
+        if not content:
+            # Writer가 재시도 시각을 기록하고 pending으로 되돌린 경우입니다.
+            return
 
-        # 5. 품질 점수화 + 기준 미만 자동 개선 (선택)
+        # 4. 품질 점수화 후 기준 미만 글만 편집합니다.
+        # 모든 글을 통째로 다시 쓰던 기존 흐름보다 출력 토큰을 크게 줄이면서
+        # 실제로 보강이 필요한 글에는 같은 품질 루프를 유지합니다.
         if ENABLE_QUALITY_SCORE and content:
             from agents import editor
             for attempt in range(1, MAX_QUALITY_ATTEMPTS + 1):
                 total, detail = editor.score(post_id, title, content, attempt)
                 if total is None or total >= QUALITY_THRESHOLD:
                     break
-                if attempt < MAX_QUALITY_ATTEMPTS:
+                if ENABLE_EDITOR and attempt < MAX_QUALITY_ATTEMPTS:
                     title, content = editor.improve(post_id, title, content, detail)
+                else:
+                    break
+        elif ENABLE_EDITOR and content:
+            from agents import editor
+            title, content = editor.edit(post_id, title, content)
 
         # 6. SEO 태그 생성 (선택)
         seo_tags = ''
@@ -119,18 +129,31 @@ def run_pipeline(post_id: int, keywords: list[str]):
 
         # 최종본 DB 저장
         if content:
+            if AUTO_PUBLISH:
+                final_status = "scheduled"
+            elif REQUIRE_CEO_APPROVAL:
+                final_status = "pending_approval"
+            else:
+                final_status = "approved"
             conn = get_conn()
-            conn.execute("UPDATE posts SET title = ?, content = ?, seo_tags = ? WHERE id = ?",
-                         (title, content, seo_tags, post_id))
+            conn.execute(
+                """UPDATE posts
+                   SET title = ?, content = ?, seo_tags = ?, status = ?,
+                       retry_count = 0, retry_after = NULL, last_error = NULL
+                   WHERE id = ?""",
+                (title, content, seo_tags, final_status, post_id),
+            )
             conn.commit()
             conn.close()
+            add_log(post_id, f"전체 파이프라인 완료. 상태: {final_status}")
         
     except Exception as e:
-        add_log(post_id, f"파이프라인 오류: {e}", "error")
-        conn = get_conn()
-        conn.execute("UPDATE posts SET status = 'error' WHERE id = ?", (post_id,))
-        conn.commit()
-        conn.close()
+        attempt, retry_at = defer_post(post_id, e)
+        add_log(
+            post_id,
+            f"파이프라인 일시 실패(재시도 {attempt}회차, {retry_at} 이후): {e}",
+            "warning",
+        )
 
 def trigger_daily_pipeline(project_id: int, target_date: datetime = None):
     """

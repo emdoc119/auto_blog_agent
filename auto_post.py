@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import argparse
+import tempfile
 import markdown
 from playwright.sync_api import sync_playwright
 
@@ -13,6 +14,29 @@ TITLE_X = 300
 TITLE_Y = 280
 BODY_X  = 300
 BODY_Y  = 480
+
+
+def _rss_contains_title(title: str) -> bool:
+    """Verify that Naver actually exposed the just-published title in RSS."""
+    import requests
+    import xml.etree.ElementTree as ET
+
+    expected = " ".join(title.split())
+    try:
+        response = requests.get(
+            "https://rss.blog.naver.com/emdoc119.xml",
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=15,
+        )
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+        return any(
+            " ".join((item.findtext("title") or "").split()) == expected
+            for item in root.findall(".//item")[:20]
+        )
+    except Exception as exc:
+        print(f"  RSS verification pending: {exc}")
+        return False
 
 
 def main():
@@ -47,8 +71,12 @@ def main():
 
         print("Clicking '글쓰기'...")
         try:
+            write_link = page.locator("a:has-text('글쓰기')").first
+            if write_link.count() == 0:
+                raise RuntimeError("글쓰기 링크를 찾지 못했습니다. 로그인 세션을 갱신하세요.")
             with context.expect_page(timeout=15000) as new_tab:
-                page.locator("a:has-text('글쓰기')").first.click()
+                # 네이버 홈의 링크가 화면 밖/투명 상태여도 DOM 클릭은 정상 동작합니다.
+                write_link.evaluate("el => el.click()")
             editor = new_tab.value
         except Exception as e:
             print(f"ERROR: Cannot open editor: {e}", file=sys.stderr)
@@ -56,6 +84,10 @@ def main():
             sys.exit(1)
 
         editor.wait_for_load_state("domcontentloaded")
+        if "nidlogin" in editor.url:
+            print("ERROR: Session expired while opening editor.", file=sys.stderr)
+            browser.close()
+            sys.exit(1)
         print("Waiting for SmartEditor ONE to initialize...")
         time.sleep(12)
 
@@ -104,7 +136,6 @@ def main():
 
         print("Parsing and downloading images...")
         import re
-        import requests
         import uuid
         
         image_matches = re.findall(r'!\[.*?\]\((https?://[^\)]+)\)', args.content)
@@ -141,8 +172,11 @@ def main():
         html_content = markdown.markdown(fixed_content, extensions=['tables', 'fenced_code', 'nl2br'])
         
         # 임시 HTML 파일 생성 후 브라우저에서 열어서 전체 복사 (OS 클립보드 완벽 연동)
-        tmp_html_path = os.path.abspath("temp_post.html")
-        with open(tmp_html_path, "w", encoding="utf-8") as f:
+        tmp_file = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".html", prefix="blog_post_", encoding="utf-8", delete=False
+        )
+        tmp_html_path = tmp_file.name
+        with tmp_file as f:
             f.write(f"<html><body>{html_content}</body></html>")
             
         page_html = context.new_page()
@@ -218,11 +252,13 @@ def main():
                         print(f"  Category '{args.category}' selected successfully.")
                         time.sleep(1)
                     else:
-                        print(f"  Warning: Category '{args.category}' not found in dropdown.")
+                        raise RuntimeError(f"카테고리 '{args.category}' 항목을 찾지 못했습니다.")
                 else:
-                    print("  Warning: Category dropdown button not found.")
+                    raise RuntimeError("카테고리 목록 버튼을 찾지 못했습니다.")
             except Exception as e:
-                print(f"  Error selecting category: {e}")
+                print(f"ERROR: Category selection failed: {e}", file=sys.stderr)
+                browser.close()
+                sys.exit(1)
 
         # 태그 입력 로직 (best-effort)
         if args.tags:
@@ -244,9 +280,11 @@ def main():
                 print(f"  Error adding tags: {e}")
 
         print("Clicking 2nd final confirm button via JS...")
+        confirm_clicked = False
         confirm_btn = main_frame.locator("button[class*='confirm_btn__']").first
         if confirm_btn.count() > 0:
             confirm_btn.evaluate("b => b.click()")
+            confirm_clicked = True
             print("  Final confirm button clicked! 🎉")
         else:
             print("  Warning: confirm_btn__ not found, trying fallback...")
@@ -254,17 +292,35 @@ def main():
                 try:
                     if "confirm_btn" in (btn.get_attribute("class") or ""):
                         btn.evaluate("b => b.click()")
+                        confirm_clicked = True
                         print("  Final confirm button clicked (fallback)!")
                         break
                 except: pass
 
-        time.sleep(5)
+        if not confirm_clicked:
+            print("ERROR: Final publish confirmation button was not clicked.", file=sys.stderr)
+            browser.close()
+            sys.exit(1)
+
+        verified = False
+        # SmartEditor가 URL을 유지하는 경우가 있어 URL 전환과 RSS를 함께 확인합니다.
+        for _ in range(10):
+            time.sleep(5)
+            current_url = editor.url
+            if "PostWriteForm" not in current_url and "Write" not in current_url:
+                verified = True
+                break
+            if _rss_contains_title(args.title):
+                verified = True
+                break
+
         print(f"Final URL: {editor.url}")
-        
-        if "Write" not in editor.url:
-            print("SUCCESS: Published successfully!")
-        else:
-            print("SUCCESS: Finished script (please verify manually if URL didn't change).")
+        if not verified:
+            print("ERROR: Publish could not be verified by URL or RSS.", file=sys.stderr)
+            browser.close()
+            sys.exit(1)
+
+        print("SUCCESS: Published and verified successfully!")
 
         browser.close()
         sys.exit(0)

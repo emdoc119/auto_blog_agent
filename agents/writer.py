@@ -7,9 +7,9 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from db import get_conn
-from config import REQUIRE_CEO_APPROVAL, AUTO_PUBLISH
 import llm
 import image_source
+from pipeline_state import defer_post
 
 def add_log(post_id, message, level="info"):
     conn = get_conn()
@@ -197,11 +197,12 @@ def write(post_id: int, keywords: str, research_data: str, trend_strategy: str =
                 add_log(post_id, f"보강 실패(초안 유지): {pe}", "warning")
 
     except Exception as e:
-        add_log(post_id, f"글쓰기 최종 실패: {e}", "error")
-        conn = get_conn()
-        conn.execute("UPDATE posts SET status = 'error' WHERE id = ?", (post_id,))
-        conn.commit()
-        conn.close()
+        attempt, retry_at = defer_post(post_id, e)
+        add_log(
+            post_id,
+            f"글쓰기 일시 실패(재시도 {attempt}회차, {retry_at} 이후): {e}",
+            "warning",
+        )
         return "", ""
 
     # 저작권 프리 실사 사진(Pexels)을 본문 중간에 인라인으로 삽입
@@ -210,20 +211,19 @@ def write(post_id: int, keywords: str, research_data: str, trend_strategy: str =
     except Exception as ie:
         add_log(post_id, f"사진 삽입 실패(텍스트만 발행): {ie}", "warning")
 
-    if AUTO_PUBLISH:
-        next_status = "scheduled"
-    elif REQUIRE_CEO_APPROVAL:
-        next_status = "pending_approval"
-    else:
-        next_status = "approved"
+    # 품질 채점과 SEO까지 끝나기 전에 예약 발행 스레드가 가져가지 못하게 합니다.
+    next_status = "editing"
 
     conn = get_conn()
     conn.execute(
-        "UPDATE posts SET title = ?, content = ?, status = ? WHERE id = ?",
+        """UPDATE posts
+           SET title = ?, content = ?, status = ?, retry_count = 0,
+               retry_after = NULL, last_error = NULL
+           WHERE id = ?""",
         (title, content, next_status, post_id)
     )
     conn.commit()
     conn.close()
 
-    add_log(post_id, f"글쓰기 완료. 상태: {next_status}")
+    add_log(post_id, f"초안 작성 완료. 상태: {next_status}")
     return title, content
