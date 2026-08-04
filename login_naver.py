@@ -22,8 +22,21 @@ def main():
         page = context.new_page()
         page.goto("https://nid.naver.com/nidlogin.login")
 
+        credentials_prefilled = False
+        try:
+            from naver_auth import _fill_login, get_credentials
+            credentials = get_credentials()
+            if credentials:
+                _fill_login(page, credentials[0], credentials[1])
+                credentials_prefilled = True
+        except Exception as exc:
+            print(f"  키체인 자동 입력 경고: {exc}")
+
         print("=" * 56)
-        print("  열린 브라우저 창에서 네이버 아이디/비밀번호로 로그인하세요.")
+        if credentials_prefilled:
+            print("  키체인 정보는 자동 입력했습니다. 네이버의 추가 보안 확인만 완료하세요.")
+        else:
+            print("  열린 브라우저 창에서 네이버 아이디/비밀번호로 로그인하세요.")
         print("  로그인에 성공하면 자동으로 세션이 저장됩니다 (최대 10분).")
         print("=" * 56, flush=True)
 
@@ -63,13 +76,8 @@ def main():
         context.storage_state(path=STATE_FILE)
         # 재로그인 대기 때문에 멈춰 둔 네이버 계정을 즉시 재활성화합니다.
         try:
-            from db import get_conn
-            conn = get_conn()
-            conn.execute(
-                "UPDATE accounts SET status = 'active' WHERE platform = 'naver'"
-            )
-            conn.commit()
-            conn.close()
+            from naver_auth import activate_naver_accounts
+            activate_naver_accounts()
         except Exception as exc:
             print(f"계정 상태 재활성화 경고: {exc}")
         print(f"로그인 세션 저장 완료: {STATE_FILE}")

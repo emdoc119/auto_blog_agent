@@ -8,7 +8,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 from db import get_conn, init_db
-from config import FLASK_HOST, FLASK_PORT, FLASK_SECRET_KEY, AUTO_PUBLISH
+from config import (
+    FLASK_HOST, FLASK_PORT, FLASK_SECRET_KEY, AUTO_PUBLISH,
+    NAVER_AUTO_LOGIN_ENABLED, NAVER_REAUTH_INTERVAL_MINUTES,
+)
 from agents import orchestrator, publisher
 import time
 import threading
@@ -401,12 +404,62 @@ def background_scheduler():
     recovery_conn.close()
 
     last_daily_check = None
+    last_reauth_attempt = None
+    reauth_thread = None
+    reauth_success = threading.Event()
+    last_active_account_count = None
+
+    def run_auto_reauth():
+        try:
+            import naver_auth
+            result = naver_auth.attempt_auto_login(headless=True)
+            print(f"🔐 네이버 자동 로그인: {'성공' if result.ok else '보류'} - {result.reason}")
+            if result.ok:
+                reauth_success.set()
+            elif result.manual_action_required:
+                naver_auth.require_manual_naver_reauth()
+        except Exception as exc:
+            print(f"🔐 네이버 자동 로그인 오류: {exc}")
+
     while True:
         try:
             conn = get_conn()
-            from datetime import datetime, date
+            from datetime import datetime, date, timedelta
             now = datetime.now()
             today = now.date()
+
+            if reauth_success.is_set():
+                reauth_success.clear()
+                last_daily_check = None
+
+            active_account_count = conn.execute(
+                "SELECT COUNT(*) FROM accounts WHERE status = 'active'"
+            ).fetchone()[0]
+            if (
+                last_active_account_count is not None
+                and active_account_count > last_active_account_count
+            ):
+                # 수동 로그인 또는 별도 setup 프로세스가 계정을 활성화한 경우에도
+                # 같은 날의 누락 일정을 즉시 다시 점검합니다.
+                last_daily_check = None
+            last_active_account_count = active_account_count
+
+            # 계정 세션이 만료되면 키체인 자격증명으로 백그라운드 갱신합니다.
+            needs_reauth = conn.execute("""
+                SELECT COUNT(*) FROM accounts
+                WHERE platform = 'naver' AND status = 'reauth_required'
+            """).fetchone()[0] > 0
+            reauth_due = (
+                last_reauth_attempt is None
+                or now - last_reauth_attempt >= timedelta(minutes=NAVER_REAUTH_INTERVAL_MINUTES)
+            )
+            if (
+                NAVER_AUTO_LOGIN_ENABLED and needs_reauth and reauth_due
+                and (reauth_thread is None or not reauth_thread.is_alive())
+            ):
+                last_reauth_attempt = now
+                reauth_thread = threading.Thread(target=run_auto_reauth, daemon=True)
+                reauth_thread.start()
             
             # 1. 일일 피드백 분석 및 통계 수집
             if last_daily_check != today:
@@ -419,7 +472,12 @@ def background_scheduler():
                 except Exception as e:
                     print(f"Stats Scraper error: {e}")
 
-                active_projects = conn.execute("SELECT id FROM projects WHERE status = 'active'").fetchall()
+                active_projects = conn.execute("""
+                    SELECT pr.id
+                    FROM projects pr
+                    JOIN accounts a ON pr.account_id = a.id
+                    WHERE pr.status = 'active' AND a.status = 'active'
+                """).fetchall()
                 for p in active_projects:
                     try:
                         # 1-1. 성과 분석
@@ -429,7 +487,6 @@ def background_scheduler():
                         print(f"Feedback Agent error for project {p['id']}: {e}")
                         
                     # 1-2. 오늘, 내일(2일치) 스케줄 포스트 생성
-                    from datetime import timedelta
                     for day_offset in range(2):
                         target_date = today + timedelta(days=day_offset)
                         target_str = target_date.strftime("%Y-%m-%d")

@@ -75,6 +75,10 @@ MAX_QUALITY_ATTEMPTS = int(os.getenv("MAX_QUALITY_ATTEMPTS", "2"))  # 최대 개
 # SEO 태그 자동 생성 (발행 시 네이버 태그 입력)
 ENABLE_SEO = os.getenv("ENABLE_SEO", "1") not in ("0", "false", "False")
 
+# 네이버 세션 만료 시 macOS Keychain 자격증명으로 제한적 자동 재로그인
+NAVER_AUTO_LOGIN_ENABLED = os.getenv("NAVER_AUTO_LOGIN_ENABLED", "1") not in ("0", "false", "False")
+NAVER_REAUTH_INTERVAL_MINUTES = int(os.getenv("NAVER_REAUTH_INTERVAL_MINUTES", "360"))
+
 # Flask 설정
 FLASK_HOST = "0.0.0.0"
 FLASK_PORT = 5001
