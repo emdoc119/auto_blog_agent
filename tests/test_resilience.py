@@ -6,10 +6,11 @@ import unittest
 from unittest.mock import patch
 
 import llm
+import jarvis_notify
 import naver_auth
 import pipeline_state
 import setup_naver_credentials
-from agents import orchestrator, writer
+from agents import editor, orchestrator, writer
 
 
 class LLMRoutingTests(unittest.TestCase):
@@ -136,6 +137,18 @@ class PipelineStateTransitionTests(unittest.TestCase):
         conn.close()
         self.assertEqual(status, "scheduled")
 
+    def test_missing_quality_score_defers_instead_of_scheduling(self):
+        with patch.object(orchestrator, "get_conn", side_effect=self._connect), \
+             patch.object(orchestrator.researcher, "research", return_value="research"), \
+             patch.object(orchestrator.writer, "write", return_value=("title", "content")), \
+             patch.object(editor, "score", return_value=(None, "invalid score")), \
+             patch.object(orchestrator, "ENABLE_QUALITY_SCORE", True), \
+             patch.object(orchestrator, "ENABLE_EDITOR", True), \
+             patch.object(orchestrator, "ENABLE_SEO", False), \
+             patch.object(orchestrator, "defer_post", return_value=(1, "later")) as defer:
+            orchestrator.run_pipeline(1, ["테스트"])
+        defer.assert_called_once()
+
 
 class NaverCredentialTests(unittest.TestCase):
     def test_missing_keychain_credentials_require_manual_setup(self):
@@ -194,6 +207,37 @@ class NaverCredentialTests(unittest.TestCase):
             value = setup_naver_credentials._mac_dialog("비밀번호", hidden=True)
         self.assertEqual(value, "value")
         self.assertIn("with hidden answer", run.call_args.args[0][-1])
+
+
+class JarvisNotificationTests(unittest.TestCase):
+    def test_duplicate_state_is_not_sent(self):
+        with patch.object(jarvis_notify, "_should_send", return_value=False), \
+             patch.object(jarvis_notify.requests, "post") as post:
+            sent = jarvis_notify.send_state("auth", "manual", "title", "message")
+        self.assertFalse(sent)
+        post.assert_not_called()
+
+    def test_single_user_alert_is_sent_and_recorded(self):
+        class Response:
+            status_code = 200
+
+            def json(self):
+                return {"ok": True}
+
+        with patch.object(jarvis_notify, "_should_send", return_value=True), \
+             patch.object(
+                 jarvis_notify, "_keychain_read", side_effect=["bot-token", "123456"]
+             ), \
+             patch.object(jarvis_notify.requests, "post", return_value=Response()) as post, \
+             patch.object(jarvis_notify, "_record_sent") as record:
+            sent = jarvis_notify.send_state(
+                "naver_auth", "manual_required", "확인 필요", "추가 인증", severity="warning"
+            )
+
+        self.assertTrue(sent)
+        self.assertEqual(post.call_args.kwargs["json"]["chat_id"], 123456)
+        self.assertIn("Jarvis · Blog Agent", post.call_args.kwargs["json"]["text"])
+        record.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -52,7 +52,7 @@ def main():
     result = attempt_auto_login(headless=True)
     print(f"{'자동 로그인 성공' if result.ok else '자동 로그인 보류'}: {result.reason}")
     if not result.ok and result.manual_action_required:
-        require_manual_naver_reauth()
+        require_manual_naver_reauth(result.reason)
         print("CAPTCHA·2단계 인증이 있으면 login_naver.py로 한 번만 수동 확인하세요.")
 
 

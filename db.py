@@ -34,6 +34,14 @@ def migrate_schema(conn):
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS notification_state (
+            event_key TEXT PRIMARY KEY,
+            state TEXT NOT NULL,
+            last_sent_at DATETIME,
+            payload_hash TEXT
+        )
+    """)
 
 
 def init_db():

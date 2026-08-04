@@ -106,12 +106,16 @@ def run_pipeline(post_id: int, keywords: list[str]):
             from agents import editor
             for attempt in range(1, MAX_QUALITY_ATTEMPTS + 1):
                 total, detail = editor.score(post_id, title, content, attempt)
-                if total is None or total >= QUALITY_THRESHOLD:
+                if total is None:
+                    raise RuntimeError("품질 점수 산출 실패")
+                if total >= QUALITY_THRESHOLD:
                     break
                 if ENABLE_EDITOR and attempt < MAX_QUALITY_ATTEMPTS:
                     title, content = editor.improve(post_id, title, content, detail)
                 else:
-                    break
+                    raise RuntimeError(
+                        f"품질 기준 미달: {total:.0f}/{QUALITY_THRESHOLD}"
+                    )
         elif ENABLE_EDITOR and content:
             from agents import editor
             title, content = editor.edit(post_id, title, content)

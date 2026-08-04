@@ -180,12 +180,27 @@ def activate_naver_accounts() -> None:
     from db import get_conn
 
     conn = get_conn()
+    previous = conn.execute(
+        "SELECT COUNT(*) FROM accounts WHERE platform = 'naver' AND status != 'active'"
+    ).fetchone()[0]
     conn.execute("UPDATE accounts SET status = 'active' WHERE platform = 'naver'")
     conn.commit()
     conn.close()
+    if previous:
+        try:
+            import jarvis_notify
+            jarvis_notify.send_state(
+                "naver_auth",
+                "resolved",
+                "네이버 자동화 정상 복구",
+                "로그인 세션이 갱신되어 글 생성과 예약 발행을 다시 시작합니다.",
+                severity="resolved",
+            )
+        except Exception:
+            pass
 
 
-def require_manual_naver_reauth() -> None:
+def require_manual_naver_reauth(reason: str = "네이버의 추가 보안 확인이 필요합니다.") -> None:
     """Stop automatic retries after a security challenge or missing setup."""
     from db import get_conn
 
@@ -195,6 +210,17 @@ def require_manual_naver_reauth() -> None:
     )
     conn.commit()
     conn.close()
+    try:
+        import jarvis_notify
+        jarvis_notify.send_state(
+            "naver_auth",
+            "manual_required",
+            "네이버 수동 확인 필요",
+            f"블로그 생성·발행을 안전하게 멈췄습니다.\n사유: {reason[:500]}",
+            severity="warning",
+        )
+    except Exception:
+        pass
 
 
 def _has_naver_session(context) -> bool:

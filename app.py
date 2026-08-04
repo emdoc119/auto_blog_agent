@@ -11,6 +11,7 @@ from db import get_conn, init_db
 from config import (
     FLASK_HOST, FLASK_PORT, FLASK_SECRET_KEY, AUTO_PUBLISH,
     NAVER_AUTO_LOGIN_ENABLED, NAVER_REAUTH_INTERVAL_MINUTES,
+    ENABLE_QUALITY_SCORE,
 )
 from agents import orchestrator, publisher
 import time
@@ -417,7 +418,7 @@ def background_scheduler():
             if result.ok:
                 reauth_success.set()
             elif result.manual_action_required:
-                naver_auth.require_manual_naver_reauth()
+                naver_auth.require_manual_naver_reauth(result.reason)
         except Exception as exc:
             print(f"🔐 네이버 자동 로그인 오류: {exc}")
 
@@ -539,8 +540,9 @@ def background_scheduler():
                   AND (p.retry_after IS NULL OR p.retry_after <= ?)
                   AND pr.status = 'active'
                   AND a.status = 'active'
+                  AND (? = 0 OR p.quality_score IS NOT NULL)
                 ORDER BY p.scheduled_at ASC
-            """, (now_str, now_str)).fetchall()
+            """, (now_str, now_str, 1 if ENABLE_QUALITY_SCORE else 0)).fetchall()
             
             from collections import defaultdict
             from datetime import timedelta
