@@ -48,6 +48,20 @@ class LLMRoutingTests(unittest.TestCase):
         self.assertIsNotNone(reset)
         self.assertGreater(reset, time.time())
 
+    def test_all_open_circuits_report_a_real_reason(self):
+        future = time.time() + 600
+        llm._CIRCUIT_OPEN_UNTIL.update({"QWEN": future, "GEMINI": future})
+        llm._CIRCUIT_REASON.update({"QWEN": "quota", "GEMINI": "temporary auth"})
+        with patch.object(
+            llm,
+            "_provider_chain",
+            return_value=[("QWEN", None, "q"), ("GEMINI", None, "g")],
+        ):
+            with self.assertRaises(llm.LLMUnavailableError) as caught:
+                llm.generate("hello")
+        self.assertNotIn("None", str(caught.exception))
+        self.assertIn("GEMINI 회로 대기", str(caught.exception))
+
 
 class RetryPolicyTests(unittest.TestCase):
     def test_defer_post_records_provider_retry_time(self):

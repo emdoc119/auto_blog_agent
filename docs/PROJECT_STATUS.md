@@ -8,7 +8,7 @@
 - macOS LaunchAgent(`com.blogagent.dashboard`)로 로그인 시 시작·장애 시 재시작.
 - 서비스 HTTP 200 확인. 현재 LAN 주소는 `http://192.168.0.9:5001/`.
 - Qwen은 한도·인증 오류 때 회로를 즉시 차단하고 Gemini로 폴백함.
-- 네이버 계정은 현재 `reauth_required`. 오늘·내일 작업 20건만 유지하고 자동 로그인 설정 전까지 안전 정지.
+- 네이버 계정은 현재 `active`. 오늘·내일 작업 20건을 품질 게이트를 거쳐 순차 재처리 중.
 - 과거 밀린 작업 68건은 데이터는 보존한 채 `cancelled` 처리.
 
 ## 파이프라인
@@ -35,11 +35,10 @@
 
 ## 알려진 문제 / 다음 우선순위
 
-1. Keychain 등록은 완료. 네이버가 새 환경 보안 추가 확인을 요구해 1회 수동 확인 필요.
-2. Python 3.9 EOL 및 LibreSSL 경고가 있어 Python 3.11+ 런타임으로 이전 권장.
-3. 대시보드가 LAN 전체(`0.0.0.0`)에 인증 없이 노출됨. Basic Auth/CSRF 적용 필요.
-4. CAPTCHA·2단계 인증 발생 시 `login_naver.py`로 수동 확인 필요.
-5. LAN IP가 DHCP로 바뀌므로 고정 주소 또는 로컬 호스트명 도입 검토.
+1. Python 3.9 EOL 및 LibreSSL 경고가 있어 Python 3.11+ 런타임으로 이전 권장.
+2. 대시보드가 LAN 전체(`0.0.0.0`)에 인증 없이 노출됨. Basic Auth/CSRF 적용 필요.
+3. CAPTCHA·2단계 인증 발생 시 `login_naver.py`로 수동 확인 필요하며 Jarvis가 알림.
+4. LAN IP가 DHCP로 바뀌므로 고정 주소 또는 로컬 호스트명 도입 검토.
 
 ## 운영 메모
 
@@ -48,4 +47,4 @@
 - 자동 로그인 자격증명 등록(GUI): `../venv/bin/python -B setup_naver_credentials.py --gui`
 - Jarvis 알림 설정: `../venv/bin/python -B setup_jarvis_notifications.py`
 - 주요 로그: `scheduler_run.log`, DB `logs` 테이블
-- 비밀키는 Git에서 제외된 `.env`에만 저장하며 로그·문서에 값을 기록하지 않음.
+- API 키는 Git 제외 `.env`, 네이버·Jarvis 인증정보는 macOS Keychain에 저장하며 로그·문서에 값을 기록하지 않음.

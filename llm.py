@@ -243,6 +243,12 @@ def generate(prompt, tier="cheap", max_tokens=DEFAULT_MAX_TOKENS,
         circuit_until = _CIRCUIT_OPEN_UNTIL.get(name, 0)
         if circuit_until > time.time():
             retry_times.append(circuit_until)
+            reason = _CIRCUIT_REASON.get(name, "일시적 공급자 대기")
+            last_error = ProviderCallError(
+                f"{name} 회로 대기: {reason}",
+                retryable=False,
+                retry_after=circuit_until,
+            )
             continue
         _CIRCUIT_OPEN_UNTIL.pop(name, None)
         _CIRCUIT_REASON.pop(name, None)
