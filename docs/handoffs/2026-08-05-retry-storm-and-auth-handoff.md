@@ -1,6 +1,6 @@
-# Qwen 3.8 Max Preview Handoff — 재시도 폭주 수정 + 파일 정리 + 네이버 로그인 복구
+# Qwen 3.8 Max Preview Handoff — 네이버 로그인 완료 + 런타임 게이트 검증
 
-> 생성: 2026-08-05 (KST), 직전 세션(GPT-5, Model Lock 미충족으로 편집 중단) 작성
+> 갱신: 2026-08-05 (KST), Qwen 3.8 Max Preview 세션 작성. 재시도 폭주 수정·`.env.md` 삭제·서비스 재시작까지 완료.
 
 ## Source of Truth
 
@@ -14,37 +14,38 @@
 ## Model Lock
 
 - Main: `Qwen 3.8 Max Preview`
-- Subagents: exact same displayed model and canonical runtime ID (`alibaba-token-plan-intl/qwen38-max-preview` 계열, spawn 시 표시명 `Qwen 3.8 Max Preview` 확인 필수)
+- Subagents: exact same displayed model and canonical runtime ID (`alibaba-token-plan-intl/qwen3.8-max-preview`, spawn 시 표시명 `Qwen 3.8 Max Preview` 확인 필수)
 - Fallback: none
 - Failure behavior: record `BLOCKED` and stop
 
 ## Current State
 
-- Last completed task: 진단 완료. Qwen 주간 quota가 08-05 06:12 UTC에 리셋된 뒤 `qwen3.6-flash` 호출 6회 성공(15:13~15:15 KST), 글 353/354/355가 품질 게이트(86/84/82점) 통과 후 `scheduled` 전환 확인.
-- Commits: `9a1eb3f` fix: report open LLM circuit reasons / `6ef16b6` feat: Jarvis alerts / `ea86740` feat: secure Naver session auto-refresh
-- Test baseline: 이번 세션에서 미실행. `tests/test_resilience.py` 존재. 재개 시 먼저 `../venv/bin/python -m pytest tests/ -q` (또는 unittest)로 베이스라인 확보.
-- Runtime health: LaunchAgent `com.blogagent.dashboard` running (점검 시 pid 43664), `*:5001` LISTEN 확인. LAN 주소 `http://192.168.0.9:5001/` (DHCP로 변동될 수 있음). 샌드박스 내 curl은 네트워크 제한으로 실패했으므로 브라우저 또는 샌드박스 밖에서 HTTP 200 검증할 것.
-- Active deployment path: 동일 디렉터리를 LaunchAgent가 직접 서빙. venv는 `../venv` (Python 3.9).
+- Last completed task: 재시도 폭주 수정 구현·배포 완료(2026-08-05, Qwen 3.8 Max Preview 메인 세션). `pipeline_state.claim_pending_post` 원자 선점 + 진행 중 가드 + 동시 파이프라인 상한(2), `defer_post`는 지수 백오프와 제공자 재시도 시각 중 더 늦은 시각 선택. `.env.md` 삭제 완료. 서비스 재시작·헬스 확인 완료.
+- Commits: `3d0b285` fix: atomic pending claim and growing backoff stop retry storm (브랜치 `codex/retry-storm-auth-recovery`) / 베이스: `9a1eb3f` fix: report open LLM circuit reasons
+- Test baseline: 21/21 통과 (`PYTHONPATH=. ../venv/bin/python -B -m unittest discover -s tests -v`). pytest는 미설치라 unittest 사용.
+- Runtime health: LaunchAgent `com.blogagent.dashboard` 수정 코드 반영 재시작 완료(점검 시 pid 94340), `/api/status` HTTP 200 확인. LAN 주소 `http://192.168.0.9:5001/` (DHCP 변동 가능). 샌드박스 내 curl/launchctl은 제한이라 검증은 escalation 필요.
+- Active deployment path: 동일 디렉터리를 LaunchAgent가 직접 서빙. venv는 `../venv` (Python 3.9). stdout 블록 버퍼링으로 `scheduler_run.log`는 지연 기록 — 즉시 확인은 DB `logs` 테이블.
 - DB 상태 (`blog_agent_v2.db`):
-  - accounts: naver = `manual_reauth_required` (세션 만료로 발행 정지)
-  - posts: published 81, scheduled 3 (353/354/355), pending 17 (retry_count 최대 56), cancelled 68
-  - 353은 발행 시도 중 "Session expired while opening editor"로 실패, retry_after `2026-08-05 15:44:28`
-- Qwen 설정: `QWEN_MODEL=qwen3.6-flash`, `QWEN_STRONG_MODEL=qwen3.7-plus`, base URL은 Alibaba token-plan compatible-mode. 키는 `.env`(Git 제외)에 저장.
+  - accounts: naver = `manual_reauth_required` (네이버 "보안 추가 확인" 대기. headless 자동 로그인 시도 결과 manual=True)
+  - posts: published 81, scheduled 3 (353/354/355), pending 17 (retry_count 최대 56, 수정된 백오프 적용 대기), cancelled 68
+  - 계정 비활성 동안 선점 쿼리가 accounts를 JOIN하므로 pending 처리는 자연스럽게 정지 상태.
+- Qwen 설정: `QWEN_MODEL=qwen3.6-flash`, `QWEN_STRONG_MODEL=qwen3.7-plus`, base URL은 Alibaba token-plan compatible-mode. 키는 `.env`(Git 제외)에 저장. 과거 `.env.md` 노출 건으로 로테이션 권고.
 
 ## Known Issues
 
-1. 재시도 폭주 (핵심): `app.py background_scheduler`가 매분 pending 1건을 골라 스레드를 띄우는데, 실패 시 `pipeline_state.defer_post`가 백오프를 잡아도 같은 글이 다시 집혀 매분 재실행됨. 로그에 동일 post "파이프라인 재시작"이 매분 반복, retry_count 56회 도달. 수정 대상: 원자적 선점(claim), 진행 중 post 중복 집합 가드, 제공자 리셋 시각 존중 백오프, 동시 파이프라인 스레드 상한.
-2. 평문 키 파일: `.env.md`에 Qwen API 키 평문 존재(Git 미추적이나 디스크 상존). 직전 진단 중 도구 출력에 키가 노출된 이력 있음 → 파일 삭제 + 사용자에게 Alibaba 콘솔에서 키 로테이션 권고. `.gitignore`는 `.env*`를 이미 커버함.
-3. 네이버 세션 만료: 계정 `manual_reauth_required`. 스케줄러 자동 재로그인은 `reauth_required` 상태만 트리거하므로(설계 의도) 수동 확인 필요. `naver_auth.attempt_auto_login(headless=True)` 먼저 시도하고, CAPTCHA/2FA 등 보안 확인이 걸리면 `../venv/bin/python login_naver.py`를 headed로 띄워 사용자가 확인만 완료하게 한 뒤 `activate_naver_accounts()`.
-4. 샌드박스 제약: 이 저장소 `.git`은 샌드박스에서 읽기 전용 → git 쓰기 작업은 escalation 필요. 자동 승인 검토가 사용량 한도로 거부된 이력 있음(2026-08-09 재시도 가능 메시지). 커밋 시점에 사용자에게 명시적 승인을 요청할 것.
+1. (해결) 재시도 폭주: 커밋 `3d0b285`로 원자 선점·진행 중 가드·동시 상한·백오프 성장 적용, 회귀 테스트 7건 추가. 재발 여부만 아래 게이트 (c)~(d)로 확인.
+2. (부분 해결) 평문 키 파일: `.env.md` 삭제 완료. 남은 조치: Alibaba 콘솔에서 Qwen 키 로테이션 후 `.env` 갱신(사용자 작업).
+3. 네이버 보안 확인 대기: 계정 `manual_reauth_required`. 2026-08-05 `attempt_auto_login(headless=True)` 결과 "네이버 보안 추가 확인". headed `login_naver.py` 실행 1회는 10분 제한 타임아웃. 성공 시 스크립트가 `naver_state.json` 저장 + `activate_naver_accounts()` 수행.
+4. 샌드박스 제약: `.git` 쓰기·launchctl·localhost curl은 escalation 필요. 이번 세션에서 launchctl list/kickstart, 헤드리스/headed 로그인, 커밋 승인 이력 있음.
 5. 기존 잔여: Python 3.9 EOL/LibreSSL 경고, 대시보드 무인증 LAN 노출 (이번 범위 외, PROJECT_STATUS에 유지).
 
 ## Next Task
 
-- Objective: (1) 재시도 폭주 수정 → (2) `.env.md` 제거 및 키 위생 정리 → (3) 네이버 로그인 복구 → (4) 서비스 재시작·검증 → (5) 문서/커밋. 순서 준수.
-- Allowed files: `app.py`, `pipeline_state.py`, `tests/` (신규 테스트 추가), `docs/`, `.env.md` (삭제), 필요 최소한으로 `naver_auth.py`. 그 외 파일 수정 금지.
-- Required tests: `tests/test_resilience.py` 전부 + 신규 테스트: pending 원자적 선점(같은 post 동시 2회 집합 불가), 백오프 중 post 미재집합.
-- Runtime gate: 서비스 재시작 후 (a) `/api/status` HTTP 200, (b) `scheduler_run.log`에 동일 post 반복 재시작 소멸, (c) pending 1건이 중복 재시도 없이 scheduled/published로 전진, (d) 네이버 로그인 성공 시 353/354/355 발행 진행.
+- Objective: (1) 네이버 로그인 완료(사용자 보안 확인) → (2) 계정 재활성화 확인 → (3) 런타임 게이트 (c)(d) 검증 → (4) Qwen 키 로테이션 완료 확인. 순서 준수.
+- Login procedure: `cd /Users/choo/.gemini/antigravity/scratch/blog_agent && ../venv/bin/python -B login_naver.py` (headed, escalation 필요). 키체인 자동 입력 후 네이버 보안 추가 확인만 사용자가 완료. 성공 시 스크립트가 `naver_state.json` 저장 + 계정 재활성화 처리. 타임아웃/실패 시 사용자 준비 후 재실행. 자동 우회 금지.
+- Allowed files: `docs/` (상태·핸드오프 갱신). 코드 수정 불필요 — 로그인 중 새 오류가 발견돼도 `naver_auth.py` 수정 전에 사용자와 상의.
+- Required tests: 로그인만 수행하고 코드를 바꾸지 않으면 생략 가능. 코드를 변경하면 `PYTHONPATH=. ../venv/bin/python -B -m unittest discover -s tests -v` 전체.
+- Runtime gate: (a) `/api/status` HTTP 200 ✓, (b) 재시작 후 동일 post 반복 재시작 소멸 ✓ (계정 비활성으로 선점 0건). 남은 게이트: (c) pending 1건이 중복 재시도 없이 scheduled/published로 전진, (d) 353/354/355 발행 진행. 확인은 DB `posts`/`logs` 테이블 중심, 필요 시 escalation curl.
 - Rollback: 변경은 `codex/retry-storm-auth-recovery` 브랜치에만. 문제 시 `git switch main` 후 `launchctl kickstart -k gui/$(id -u)/com.blogagent.dashboard`.
 
 ## Delegation
