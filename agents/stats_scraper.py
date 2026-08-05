@@ -24,8 +24,9 @@ def run_stats_scraper():
         
         visitors = None
 
-        if platform == "naver" and blog_url and "naver.com" in blog_url:
-            visitors = scrape_naver_visitors(blog_url)
+        if platform == "naver":
+            target_url = blog_url if (blog_url and "naver.com" in blog_url) else "https://blog.naver.com/emdoc119"
+            visitors = scrape_naver_visitors(target_url)
         else:
             print(f"  -> 계정 {account_id} ({platform}): 지원하지 않는 통계 소스, 건너뜀")
 
@@ -60,26 +61,26 @@ def run_stats_scraper():
 def scrape_naver_visitors(url: str):
     from playwright.sync_api import sync_playwright
     visitors = None
+    # 모바일 URL이 방문자 수(오늘 NN)를 가장 명확하게 제공함
+    blog_id_match = re.search(r"blog\.naver\.com/([^/?#]+)", url)
+    blog_id = blog_id_match.group(1) if blog_id_match else "emdoc119"
+    mobile_url = f"https://m.blog.naver.com/{blog_id}"
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
-            page.goto(url, timeout=20000)
-            time.sleep(3)
+            page.goto(mobile_url, timeout=20000)
+            time.sleep(2)
             
-            # 네이버 블로그는 iframe(id="mainFrame") 안에 콘텐츠가 있음
-            # 방문자 수는 iframe 밖 좌측 메뉴에 있거나, iframe 안에 있을 수 있음
-            # 일단 본문 전체 텍스트를 가져와 정규식으로 '오늘 NN' 형태를 찾음
             text = page.locator("body").inner_text()
             
-            # 정규식 패턴: '오늘 숫자' 또는 'Today 숫자'
             match = re.search(r'(오늘|Today)\s*([0-9,]+)', text, re.IGNORECASE)
             if match:
                 num_str = match.group(2).replace(',', '')
                 visitors = int(num_str)
             browser.close()
     except Exception as e:
-        print(f"Naver 스크래핑 오류 ({url}): {e}")
+        print(f"Naver 스크래핑 오류 ({mobile_url}): {e}")
 
     return visitors
 
