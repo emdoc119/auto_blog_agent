@@ -501,32 +501,42 @@ def background_scheduler():
                 last_daily_check = today
 
             # 1.5. 'pending' 상태의 밀린 포스트 1개 처리 (API 과부하 방지를 위해 1분당 1개씩만)
-            pending_post = conn.execute("""
-                SELECT p.id, p.project_id
-                FROM posts p
-                JOIN projects pr ON p.project_id = pr.id
-                JOIN accounts a ON pr.account_id = a.id
-                WHERE p.status = 'pending'
-                  AND (p.retry_after IS NULL OR p.retry_after <= ?)
-                  AND pr.status = 'active'
-                  AND a.status = 'active'
-                ORDER BY COALESCE(p.retry_after, p.created_at), p.id
-                LIMIT 1
-            """, (now.strftime("%Y-%m-%d %H:%M:%S"),)).fetchone()
+            # 원자적 선점 + 진행 중 가드 + 동시 파이프라인 상한으로 같은 글이
+            # 중복으로 집혀 재시도 폭주가 나는 것을 막습니다.
+            from pipeline_state import (
+                MAX_CONCURRENT_PIPELINES,
+                active_pipeline_count,
+                claim_pending_post,
+                release_pipeline,
+            )
+            if active_pipeline_count() >= MAX_CONCURRENT_PIPELINES:
+                pending_post = None
+            else:
+                pending_post = claim_pending_post(now.strftime("%Y-%m-%d %H:%M:%S"))
             if pending_post:
                 pp_id = pending_post["id"]
                 project = conn.execute("SELECT * FROM projects WHERE id = ?", (pending_post["project_id"],)).fetchone()
                 if project and project["status"] == "active":
-                    conn.execute("UPDATE posts SET status = 'researching' WHERE id = ?", (pp_id,))
-                    conn.commit()
                     keywords = [k.strip() for k in project["keywords"].split(",") if k.strip()]
                     import random
                     kw_sample = random.sample(keywords, min(3, len(keywords))) if keywords else [project["title"]]
                     
                     print(f"🔄 밀린 대기 중(pending) 포스트 {pp_id} 파이프라인 재시작...")
                     from agents.orchestrator import run_pipeline
-                    t = threading.Thread(target=run_pipeline, args=(pp_id, kw_sample), daemon=True)
+
+                    def _run_claimed_pipeline(post_id, sampled_keywords):
+                        try:
+                            run_pipeline(post_id, sampled_keywords)
+                        finally:
+                            release_pipeline(post_id)
+
+                    t = threading.Thread(target=_run_claimed_pipeline, args=(pp_id, kw_sample), daemon=True)
                     t.start()
+                else:
+                    # 선점 직후 프로젝트가 비활성 상태라면 pending으로 되돌리고 슬롯 해제.
+                    conn.execute("UPDATE posts SET status = 'pending' WHERE id = ?", (pp_id,))
+                    conn.commit()
+                    release_pipeline(pp_id)
 
             # 2. 예약된 시간 발행 확인
             now_str = now.strftime("%Y-%m-%d %H:%M:%S")

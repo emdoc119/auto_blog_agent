@@ -44,7 +44,12 @@ class LLMRoutingTests(unittest.TestCase):
             self.assertEqual(calls, ["gemini"])
 
     def test_qwen_reset_timestamp_is_parsed(self):
-        reset = llm._parse_qwen_reset("quota will reset at 08-05 06:12:00 UTC")
+        # 고정 날짜는 시간이 지나면 과거가 되어 테스트가 거짓 실패합니다.
+        # 항상 미래인 내일 시각으로 파싱 로직만 검증합니다.
+        from datetime import datetime, timedelta, timezone
+
+        future = datetime.now(timezone.utc) + timedelta(days=1)
+        reset = llm._parse_qwen_reset(f"quota will reset at {future:%m-%d %H:%M:%S} UTC")
         self.assertIsNotNone(reset)
         self.assertGreater(reset, time.time())
 
