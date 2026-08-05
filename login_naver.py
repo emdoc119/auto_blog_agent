@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright
 
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "naver_state.json")
 BLOG_HOME = "https://section.blog.naver.com/BlogHome.naver"
-MAX_WAIT_SEC = 600  # 최대 10분 대기
+MAX_WAIT_SEC = 1800  # 최대 30분 대기 (원격(화면 공유)으로 보안 확인 완료 여유)
 
 
 def main():
@@ -37,7 +37,7 @@ def main():
             print("  키체인 정보는 자동 입력했습니다. 네이버의 추가 보안 확인만 완료하세요.")
         else:
             print("  열린 브라우저 창에서 네이버 아이디/비밀번호로 로그인하세요.")
-        print("  로그인에 성공하면 자동으로 세션이 저장됩니다 (최대 10분).")
+        print("  로그인에 성공하면 자동으로 세션이 저장됩니다 (최대 30분).")
         print("=" * 56, flush=True)
 
         start = time.time()
