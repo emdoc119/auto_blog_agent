@@ -8,9 +8,9 @@
 - macOS LaunchAgent(`com.blogagent.dashboard`)로 로그인 시 시작·장애 시 재시작.
 - 서비스 HTTP 200 확인. 현재 LAN 주소는 `http://192.168.0.9:5001/`.
 - Qwen은 한도·인증 오류 때 회로를 즉시 차단하고 Gemini로 폴백함.
-- 네이버 계정은 `manual_reauth_required`. 네이버 보안 추가 확인 완료를 기다리며 그동안 생성·발행 정지.
+- 네이버 계정은 `active` (2026-08-05 보안 추가 확인 완료 후 복구). 생성·발행 재개.
 - 2026-08-05 재시도 폭주 수정 완료: 원자적 선점, 진행 중 가드, 동시 파이프라인 상한, 지수 백오프 우선.
-- pending 17건·scheduled 3건(353/354/355)은 계정 복구 후 순차 처리. 과거 밀린 68건은 `cancelled` 보존.
+- published 87건(353~358 포함). 남은 pending 백로그는 수정된 선점·백오프로 순차 처리 중. 과거 밀린 68건은 `cancelled` 보존.
 
 ## 파이프라인
 
@@ -37,7 +37,7 @@
 
 ## 알려진 문제 / 다음 우선순위
 
-1. 네이버 계정 `manual_reauth_required`: `../venv/bin/python login_naver.py`를 headed로 실행해 보안 확인을 완료하면 세션 저장과 계정 재활성화가 자동으로 이뤄짐.
+1. 네이버 계정 `active` 복구 완료(2026-08-05). 세션 재만료 시 Jarvis 알림 후 `../venv/bin/python login_naver.py` headed 실행으로 수동 확인.
 2. Qwen API 키 로테이션 권장: 과거 `.env.md` 평문 노출 이력(파일은 2026-08-05 삭제). Alibaba 콘솔에서 키 재발급 후 `.env`만 갱신.
 3. Python 3.9 EOL 및 LibreSSL 경고가 있어 Python 3.11+ 런타임으로 이전 권장.
 4. 대시보드가 LAN 전체(`0.0.0.0`)에 인증 없이 노출됨. Basic Auth/CSRF 적용 필요.
