@@ -37,6 +37,19 @@ class AutoPostFormattingTests(unittest.TestCase):
         self.assertNotIn("|---|---|", result)
         self.assertNotIn("| 소변 횟수 |", result)
 
+    def test_table_rows_may_be_separated_by_blank_lines(self):
+        source = """| 구분 | 정상 | 주의 |
+
+|---|---|---|
+
+| 갈증 | 해소 | 지속 |
+
+| 피로 | 회복 | 극심 |"""
+        result = markdown_tables_to_text(source)
+        self.assertIn("📌 갈증", result)
+        self.assertIn("📌 피로", result)
+        self.assertNotIn("|---|---|", result)
+
 
 if __name__ == "__main__":
     unittest.main()

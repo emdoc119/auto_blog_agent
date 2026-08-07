@@ -57,7 +57,14 @@ def markdown_tables_to_html(text: str) -> str:
             output.append(lines[index])
             break
         header = lines[index].strip()
-        separator = lines[index + 1].strip()
+        separator_index = index + 1
+        while separator_index < len(lines) and not lines[separator_index].strip():
+            separator_index += 1
+        if separator_index >= len(lines):
+            output.append(lines[index])
+            index += 1
+            continue
+        separator = lines[separator_index].strip()
         if not (header.startswith("|") and header.endswith("|")
                 and separator.startswith("|") and separator.endswith("|")):
             output.append(lines[index])
@@ -74,8 +81,12 @@ def markdown_tables_to_html(text: str) -> str:
             continue
 
         rows = []
-        row_index = index + 2
+        row_index = separator_index + 1
         while row_index < len(lines):
+            while row_index < len(lines) and not lines[row_index].strip():
+                row_index += 1
+            if row_index >= len(lines):
+                break
             row = lines[row_index].strip()
             if not (row.startswith("|") and row.endswith("|")):
                 break
@@ -122,7 +133,14 @@ def markdown_tables_to_text(text: str) -> str:
             output.append(lines[index])
             break
         header = lines[index].strip()
-        separator = lines[index + 1].strip()
+        separator_index = index + 1
+        while separator_index < len(lines) and not lines[separator_index].strip():
+            separator_index += 1
+        if separator_index >= len(lines):
+            output.append(lines[index])
+            index += 1
+            continue
+        separator = lines[separator_index].strip()
         if not (header.startswith("|") and header.endswith("|")
                 and separator.startswith("|") and separator.endswith("|")):
             output.append(lines[index])
@@ -139,8 +157,12 @@ def markdown_tables_to_text(text: str) -> str:
             continue
 
         rows = []
-        row_index = index + 2
+        row_index = separator_index + 1
         while row_index < len(lines):
+            while row_index < len(lines) and not lines[row_index].strip():
+                row_index += 1
+            if row_index >= len(lines):
+                break
             row = lines[row_index].strip()
             if not (row.startswith("|") and row.endswith("|")):
                 break
