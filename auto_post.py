@@ -4,6 +4,7 @@ import time
 import argparse
 import tempfile
 import markdown
+from html import escape
 from playwright.sync_api import sync_playwright
 
 # 로그인 세션 파일: 스크립트와 같은 폴더의 naver_state.json 사용
@@ -37,6 +38,71 @@ def _rss_contains_title(title: str) -> bool:
     except Exception as exc:
         print(f"  RSS verification pending: {exc}")
         return False
+
+
+def markdown_tables_to_html(text: str) -> str:
+    """Convert well-formed Markdown tables to explicit, styled HTML tables.
+
+    SmartEditor may paste a Markdown table as literal text even when the
+    clipboard contains rich HTML. Explicit table markup is more consistently
+    preserved by the editor and also gives mobile readers readable cell
+    padding/borders. Malformed table-like text is left untouched.
+    """
+    lines = text.splitlines()
+    output = []
+    index = 0
+    while index < len(lines):
+        if index + 1 >= len(lines):
+            output.append(lines[index])
+            break
+        header = lines[index].strip()
+        separator = lines[index + 1].strip()
+        if not (header.startswith("|") and header.endswith("|")
+                and separator.startswith("|") and separator.endswith("|")):
+            output.append(lines[index])
+            index += 1
+            continue
+
+        header_cells = [cell.strip() for cell in header.strip("|").split("|")]
+        separator_cells = [cell.strip() for cell in separator.strip("|").split("|")]
+        if (len(header_cells) < 2 or len(header_cells) != len(separator_cells)
+                or not all(cell and set(cell) <= set("-:") and "-" in cell
+                           for cell in separator_cells)):
+            output.append(lines[index])
+            index += 1
+            continue
+
+        rows = []
+        row_index = index + 2
+        while row_index < len(lines):
+            row = lines[row_index].strip()
+            if not (row.startswith("|") and row.endswith("|")):
+                break
+            cells = [cell.strip() for cell in row.strip("|").split("|")]
+            if len(cells) != len(header_cells):
+                break
+            rows.append(cells)
+            row_index += 1
+
+        def cell_markup(tag, value):
+            return (
+                f'<{tag} style="border:1px solid #d9dee8;padding:8px;'
+                f'text-align:left;vertical-align:top;">{escape(value)}</{tag}>'
+            )
+
+        table = [
+            '<table style="border-collapse:collapse;width:100%;margin:12px 0;table-layout:fixed;">',
+            "<thead><tr>",
+            "".join(cell_markup("th", value) for value in header_cells),
+            "</tr></thead>",
+            "<tbody>",
+        ]
+        for cells in rows:
+            table.extend(["<tr>", "".join(cell_markup("td", value) for value in cells), "</tr>"])
+        table.extend(["</tbody>", "</table>"])
+        output.append("\n".join(table))
+        index = row_index
+    return "\n".join(output)
 
 
 def main():
@@ -168,8 +234,10 @@ def main():
                 print(f"Failed to download image {url}: {e}")
                 
         print("Entering content via Rich Text paste (Browser Copy method)...")
-        # Markdown을 HTML로 변환
-        html_content = markdown.markdown(fixed_content, extensions=['tables', 'fenced_code', 'nl2br'])
+        # 표는 Markdown 확장에 맡기지 않고 명시적인 HTML로 변환합니다.
+        # SmartEditor가 Markdown 표를 일반 텍스트로 붙이는 문제를 방지합니다.
+        fixed_content = markdown_tables_to_html(fixed_content)
+        html_content = markdown.markdown(fixed_content, extensions=['fenced_code', 'nl2br'])
         
         # 임시 HTML 파일 생성 후 브라우저에서 열어서 전체 복사 (OS 클립보드 완벽 연동)
         tmp_file = tempfile.NamedTemporaryFile(
