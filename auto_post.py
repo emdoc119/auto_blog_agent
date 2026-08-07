@@ -3,6 +3,7 @@ import sys
 import time
 import argparse
 import tempfile
+import re
 import markdown
 from html import escape
 from playwright.sync_api import sync_playwright
@@ -101,6 +102,63 @@ def markdown_tables_to_html(text: str) -> str:
             table.extend(["<tr>", "".join(cell_markup("td", value) for value in cells), "</tr>"])
         table.extend(["</tbody>", "</table>"])
         output.append("\n".join(table))
+        index = row_index
+    return "\n".join(output)
+
+
+def markdown_tables_to_text(text: str) -> str:
+    """Convert Markdown tables to plain-text cards safe for SmartEditor.
+
+    SmartEditor can downgrade clipboard HTML to plain text. In that path a
+    Markdown table becomes unreadable pipes and separator dashes, so the
+    default publishing representation is deliberately plain text and mobile
+    friendly. Malformed table-like text is preserved for diagnosis.
+    """
+    lines = text.splitlines()
+    output = []
+    index = 0
+    while index < len(lines):
+        if index + 1 >= len(lines):
+            output.append(lines[index])
+            break
+        header = lines[index].strip()
+        separator = lines[index + 1].strip()
+        if not (header.startswith("|") and header.endswith("|")
+                and separator.startswith("|") and separator.endswith("|")):
+            output.append(lines[index])
+            index += 1
+            continue
+
+        headers = [cell.strip() for cell in header.strip("|").split("|")]
+        separators = [cell.strip() for cell in separator.strip("|").split("|")]
+        if (len(headers) < 2 or len(headers) != len(separators)
+                or not all(cell and set(cell) <= set("-:") and "-" in cell
+                           for cell in separators)):
+            output.append(lines[index])
+            index += 1
+            continue
+
+        rows = []
+        row_index = index + 2
+        while row_index < len(lines):
+            row = lines[row_index].strip()
+            if not (row.startswith("|") and row.endswith("|")):
+                break
+            cells = [cell.strip() for cell in row.strip("|").split("|")]
+            if len(cells) != len(headers):
+                break
+            rows.append(cells)
+            row_index += 1
+
+        output.append("")
+        for cells in rows:
+            label = cells[0]
+            output.append(f"📌 {label}")
+            for header_name, value in zip(headers[1:], cells[1:]):
+                clean_header = re.sub(r"[*_`]+", "", header_name).strip()
+                clean_value = re.sub(r"[*_`]+", "", value).strip()
+                output.append(f"- {clean_header}: {clean_value}")
+            output.append("")
         index = row_index
     return "\n".join(output)
 
@@ -234,9 +292,9 @@ def main():
                 print(f"Failed to download image {url}: {e}")
                 
         print("Entering content via Rich Text paste (Browser Copy method)...")
-        # 표는 Markdown 확장에 맡기지 않고 명시적인 HTML로 변환합니다.
-        # SmartEditor가 Markdown 표를 일반 텍스트로 붙이는 문제를 방지합니다.
-        fixed_content = markdown_tables_to_html(fixed_content)
+        # SmartEditor가 클립보드 HTML을 평문으로 다운그레이드할 수 있으므로
+        # 표는 HTML이 아니라 모바일에서도 읽히는 텍스트 카드로 발행합니다.
+        fixed_content = markdown_tables_to_text(fixed_content)
         html_content = markdown.markdown(fixed_content, extensions=['fenced_code', 'nl2br'])
         
         # 임시 HTML 파일 생성 후 브라우저에서 열어서 전체 복사 (OS 클립보드 완벽 연동)
